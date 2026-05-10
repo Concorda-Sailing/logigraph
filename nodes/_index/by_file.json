@@ -1,15 +1,22 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-10T02:37:39.424960+00:00",
-  "git_commit": "23668de69b72",
-  "rule_count": 1,
-  "file_count": 4,
+  "generated_at": "2026-05-10T03:26:07.392561+00:00",
+  "git_commit": "dd72f2f60a11",
+  "rule_count": 2,
+  "file_count": 6,
   "by_file": {
+    "concorda-api/models/event_crew.py": [
+      "rule::event_crew::status_enum"
+    ],
     "concorda-api/routers/boats.py": [
       "rule::crew_visibility::peer_pii_resume_gated"
     ],
     "concorda-api/routers/events.py": [
-      "rule::crew_visibility::peer_pii_resume_gated"
+      "rule::crew_visibility::peer_pii_resume_gated",
+      "rule::event_crew::status_enum"
+    ],
+    "concorda-api/schemas/event_crew.py": [
+      "rule::event_crew::status_enum"
     ],
     "concorda-api/services/visibility.py": [
       "rule::crew_visibility::peer_pii_resume_gated"

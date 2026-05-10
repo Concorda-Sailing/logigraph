@@ -1,0 +1,74 @@
+{
+  "schema_version": 2,
+  "id": "rule::event_crew::status_enum",
+  "kind": "rule",
+  "title": "EventCrew status is one of six canonical values",
+  "statement": "EventCrew.status is canonically one of six values: pool, invited, accepted, declined, confirmed, requested. The EventCrewStatus(str, Enum) class in models/event_crew.py is the source of truth; writes go through enum members; Pydantic validates response payloads.",
+  "references_ontology": [
+    "resource::concorda::event_crew"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "concorda-api::models/event_crew.py::EventCrew",
+      "role": "enforces",
+      "where": "models/event_crew.py \u2014 defines EventCrewStatus(str, Enum) with the canonical 6 values; status column on EventCrew uses the enum value as default",
+      "confidence": "high",
+      "remote_hash": "3674c17ff29195977e738428655ba6c3cfbb3c31a474e4884c3ff20d23706e5d",
+      "stale": false
+    },
+    {
+      "depgraph_id": "concorda-api::schemas/event_crew.py::EventCrewRead",
+      "role": "enforces",
+      "where": "schemas/event_crew.py \u2014 Pydantic types status as EventCrewStatus, validates incoming/outgoing payloads",
+      "confidence": "high",
+      "remote_hash": "1f2e7580d4351bf2db95c23d28162a4296aa32c560c9557c71b010c7f8e076a9",
+      "stale": false
+    },
+    {
+      "depgraph_id": "PUT::/api/events/{0}/sailing-event/crew-pool",
+      "role": "checks",
+      "where": "events.py:set_crew_pool \u2014 writes EventCrewStatus.POOL",
+      "confidence": "high",
+      "remote_hash": "629064e8438bdb7eb57b5f7f43f98c9250d7cbe05896735f79a85eea441a7053",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/events/{0}/sailing-event/crew-invite",
+      "role": "checks",
+      "where": "events.py:send_crew_invites \u2014 transitions pool\u2192invited, with auto-accept for self",
+      "confidence": "high",
+      "remote_hash": "21311e1079ea79c505b0ecf785157cb791c08a59761cad1db5f0adb25c0f4f89",
+      "stale": false
+    },
+    {
+      "depgraph_id": "PUT::/api/events/{0}/sailing-event/crew-respond",
+      "role": "checks",
+      "where": "events.py:respond_to_event_crew \u2014 transitions invited\u2192accepted/declined",
+      "confidence": "high",
+      "remote_hash": "4b2fc2de75c1f5a9b0dd221c96c9750cd39aa9fe21446e1f1ee3acbbff0bdcbc",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/events/{0}/sailing-event/crew-request",
+      "role": "checks",
+      "where": "events.py:request_to_crew \u2014 creates EventCrewStatus.REQUESTED",
+      "confidence": "high",
+      "remote_hash": "e9399c0c11037a0f082de925a33689eaf6b8586045bfac7cbb4129ae70afbb1f",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/events/{0}/sailing-event/crew-confirm",
+      "role": "checks",
+      "where": "events.py:confirm_event_crew \u2014 transitions accepted\u2192confirmed (terminal-ish)",
+      "confidence": "high",
+      "remote_hash": "51a9cb40b54a43016d81ee2089dccf64c550f4ea1eb5061692cfa27641269c76",
+      "stale": false
+    }
+  ],
+  "fan_out": 7,
+  "confidence": "high",
+  "source": "schedule review 2026-05-10; commit dd72f2f introducing the enum",
+  "definition_status": "human_reviewed",
+  "structural_hash": "0a05ff111aec7a7f5f737baecc1bc1591746f26668e55b12b5fc938c725f8dfd",
+  "dossier": "dossiers/rules/event_crew__status_enum.md"
+}

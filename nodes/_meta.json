@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "regen_status": "complete",
-  "generated_at": "2026-05-10T02:37:39.425366+00:00",
-  "git_commit": "23668de69b72",
-  "node_count": 2,
-  "rule_count": 1,
-  "ontology_count": 1
+  "generated_at": "2026-05-10T03:26:07.392968+00:00",
+  "git_commit": "dd72f2f60a11",
+  "node_count": 4,
+  "rule_count": 2,
+  "ontology_count": 2
 }

@@ -1,10 +1,13 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-09T22:27:36.181196+00:00",
-  "git_commit": "23668de69b72",
-  "rule_count": 1,
-  "ontology_count": 1,
+  "generated_at": "2026-05-10T03:26:07.392561+00:00",
+  "git_commit": "dd72f2f60a11",
+  "rule_count": 2,
+  "ontology_count": 2,
   "by_ontology": {
+    "resource::concorda::event_crew": [
+      "rule::event_crew::status_enum"
+    ],
     "role::relational::boat_owner": [
       "rule::crew_visibility::peer_pii_resume_gated"
     ]
