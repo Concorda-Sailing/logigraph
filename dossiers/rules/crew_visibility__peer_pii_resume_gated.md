@@ -2,9 +2,9 @@
 node_id: rule::crew_visibility::peer_pii_resume_gated
 node_kind: rule
 definition_status: human_reviewed
-last_reviewed: 2026-05-09
-last_reviewed_against_hash: 9ebfaa367ee7dae1704435eb70cc714c30d6bd8b06c64c86e7716ade2158488b
-fan_out: 3
+last_reviewed: 2026-05-10
+last_reviewed_against_hash: a03364b2b93fdf09058aa3b12639cc8ee85f4212f52d09f18cf03d13e0107837
+fan_out: 5
 ---
 
 # Peer crew identity hidden unless resume is published
@@ -128,27 +128,41 @@ the response shapes differ. Phase 4 refactor target.
 
 ## Surfaces
 
-The rule is currently implemented in **three surfaces** (fan_out=3):
+As of 2026-05-10, the rule is implemented as **one canonical helper +
+three callers + one frontend mirror**. The helper consolidation
+landed when the previously-duplicated inline predicate was extracted
+(see git history of `concorda-api/services/visibility.py`).
 
-- **Backend events endpoint** (`enforces`,
-  `concorda-api/routers/events.py`): The function
-  `_event_crew_to_read` (events.py:2235–2406) computes
-  `resume_published` from `(person.preferences or {}).get("crewfinder",
-  {}).get("opt_in", False)` and applies an `include_pii` decision based
-  on `viewer_is_owner or viewer_is_self or resume_published`. PII
-  fields are null-masked when `include_pii` is false. Called from
-  `GET /api/events/{event_id}/sailing-event/crew`. **Known
-  duplication**: the same `resume_published` predicate appears
-  inline at events.py:2235 and again at :2400 — the helper has not
-  been extracted yet.
-- **Backend boats endpoint** (`enforces`,
-  `concorda-api/routers/boats.py:292–334`): The endpoint
-  `GET /api/boats/{boat_id}/crew/visible` filters crew rows by the
-  same `preferences.crewfinder.opt_in` predicate but uses boolean
-  filtering (omits non-visible rows) rather than null-masking.
-  Different response shape from the events endpoint.
-- **Frontend defensive mirror** (`displays`,
-  `concorda-web/src/app/members/schedule/[id]/page.tsx:953`):
+**Canonical helper** (`enforces`,
+`concorda-api/services/visibility.py`):
+- `has_published_resume(person) -> bool` — returns whether the
+  person has opted into crewfinder visibility. Defensive against
+  None / missing prefs / non-dict crewfinder structure.
+- `peer_can_see_pii(viewer_is_owner, viewer_id, target_person_id,
+  target_person) -> bool` — full peer-visibility decision implementing
+  the decision table (self / owner / peer-with-resume / peer-without).
+This module is the single source of truth. Any change to the rule
+should land here.
+
+**Callers consuming the helper** (`checks`):
+
+- **Backend events endpoint** (`concorda-api/routers/events.py`):
+  - `_event_crew_to_read` (events.py:2225) calls
+    `has_published_resume(person)` for the `resume_published` field
+    on every row.
+  - `get_event_crew` (events.py:2380) calls
+    `peer_can_see_pii(...)` to compute `include_pii` per row, then
+    null-masks PII fields when false.
+- **Backend boats endpoint**
+  (`concorda-api/routers/boats.py:294–329`,
+  `GET /api/boats/{boat_id}/crew/visible`): calls
+  `has_published_resume(person)` to filter rows. Uses **boolean
+  filtering** (omits non-visible rows) rather than null-masking.
+  Same predicate, different response shape — see Open Questions.
+
+**Frontend defensive mirror** (`displays`):
+
+- `concorda-web/src/app/members/schedule/[id]/page.tsx:953` —
   `const visible = ec.resume_published === true;` gates whether the
   rendered crew row shows contact info or initials-only avatar. The
   backend has already filtered — this is intentional defense in
@@ -156,21 +170,55 @@ The rule is currently implemented in **three surfaces** (fan_out=3):
   remove the second line of defense and the legibility of the rule
   in the component code.
 
-A unified `services/visibility.py::has_published_resume(person)`
-helper would consolidate the two backend predicates and the frontend
-mirror. Phase 4 refactor target.
+**Surfaces NOT yet covered** (suspected gap, surfaced by the schedule
+review of 2026-05-10):
+
+- `concorda-api/routers/profile.py::get_my_crew`
+  (`event_invitations` field, around line 596) returns
+  `invited_by_name` to the invitee with no `has_published_resume`
+  check on the inviter. This is the inverse direction (inviter → invitee)
+  not covered by the current rule statement; needs decision on whether
+  inviter names should also be opt-in gated.
+- `concorda-api/routers/events.py::list_inbox_crew_requests`
+  (around line 3035) returns the requester's full name + picture
+  + reply_to email to the boat owner. This is the inverse-of-peer
+  direction (owner sees requester); likely intentional to let owners
+  identify who's asking, but undocumented as an exception to the
+  rule.
 
 ## Open questions
 
-- Should the events endpoint and the boats `/crew/visible` endpoint
-  return the same response shape (null-mask vs. boolean filter)?
-  They implement the same rule but produce different payloads, which
-  forces frontend code to handle both.
-- Should the frontend defensive gate be made universal (every crew
-  rendering site) or removed once the API is judged sufficiently
-  trustworthy? Current position: keep, because the defense is cheap
-  and the legibility is valuable.
-- If "publishing a resume" and "wanting to be reachable" diverge in
-  the future (e.g., resume becomes a fuller profile and visibility
-  becomes a separate toggle), this rule's `attribute::resume_published`
-  reference will need to be split.
+- ✅ **Resolved 2026-05-10**: The previously-inline `resume_published`
+  predicate was duplicated three times. Now consolidated into
+  `services/visibility.py::has_published_resume`. All three callers
+  go through the helper.
+
+- **Still open**: Should the events endpoint and the boats
+  `/crew/visible` endpoint return the same response shape
+  (null-mask vs. boolean filter)? They both consume the helper
+  correctly now, but the response shapes still differ: events emits
+  rows with PII fields nulled; boats omits non-visible rows entirely.
+  Frontend code has to handle both. Refactor candidate.
+
+- **Still open**: Should the frontend defensive gate be made
+  universal (every crew rendering site) or removed once the API is
+  judged sufficiently trustworthy? Current position: keep, because
+  the defense is cheap and the legibility is valuable.
+
+- **Still open**: Should `inviter → invitee` PII be opt-in gated?
+  `profile.py::get_my_crew` currently returns `invited_by_name`
+  without checking the inviter's resume publication status. The
+  current rule statement covers `peer crew → peer crew` but not the
+  invitation direction. Needs explicit decision: extend the rule to
+  cover inviter visibility, or carve out an exception for invitations.
+
+- **Still open**: Should `owner → requester` PII be explicitly
+  documented as exempt? `events.py::list_inbox_crew_requests` returns
+  the requester's full name + picture + reply_to to the boat owner.
+  Likely intentional (owner needs to identify who's asking) but
+  currently undocumented in the rule.
+
+- **Still open**: If "publishing a resume" and "wanting to be
+  reachable" diverge in the future (e.g., resume becomes a fuller
+  profile and visibility becomes a separate toggle), this rule's
+  `attribute::resume_published` reference will need to be split.
