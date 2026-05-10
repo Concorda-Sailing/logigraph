@@ -13,3 +13,7 @@
 {"ts": "2026-05-10T03:18:54.542912+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::crew_visibility::peer_pii_resume_gated"}
 {"ts": "2026-05-10T03:19:01.113422+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::crew_visibility::peer_pii_resume_gated"}
 {"ts": "2026-05-10T03:19:06.938121+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::crew_visibility::peer_pii_resume_gated"}
+{"ts": "2026-05-10T20:49:28.775094+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-web/src/app/members/schedule/[id]/page.tsx", "rule_id": "rule::crew_visibility::peer_pii_resume_gated"}
+{"ts": "2026-05-10T20:52:32.246036+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::crew_visibility::peer_pii_resume_gated"}
+{"ts": "2026-05-10T20:52:32.246036+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::event_crew::status_enum"}
+{"ts": "2026-05-10T20:52:32.246036+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::schedule::canonical_listing"}
