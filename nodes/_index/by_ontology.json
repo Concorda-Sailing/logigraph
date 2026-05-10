@@ -1,14 +1,16 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-10T03:26:07.392561+00:00",
+  "generated_at": "2026-05-10T11:04:11.887732+00:00",
   "git_commit": "dd72f2f60a11",
-  "rule_count": 2,
+  "rule_count": 4,
   "ontology_count": 2,
   "by_ontology": {
     "resource::concorda::event_crew": [
-      "rule::event_crew::status_enum"
+      "rule::event_crew::status_enum",
+      "rule::schedule::canonical_listing"
     ],
     "role::relational::boat_owner": [
+      "rule::coowner::eligibility_at_accept",
       "rule::crew_visibility::peer_pii_resume_gated"
     ]
   }

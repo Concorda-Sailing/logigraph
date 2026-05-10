@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "id": "rule::schedule::canonical_listing",
+  "kind": "rule",
+  "title": "my-schedule is the canonical schedule endpoint; others are scope-narrowed views",
+  "statement": "The user-facing schedule has one canonical endpoint (GET /api/events/my-schedule) that aggregates personal + bookmarked + registered + crew + co-owned events. Other listing endpoints are scope-narrowed views: profile event-registrations is registrations-only, calendar feed is the same scope as my-schedule serialized as ICS, single-event detail uses the same _build_schedule_item_for_event helper to keep its shape consistent.",
+  "references_ontology": [
+    "resource::concorda::event_crew"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "GET::/api/events/my-schedule",
+      "role": "enforces",
+      "where": "events.py:159 \u2014 primary aggregator; _build_schedule_item_for_event is the canonical row shape",
+      "confidence": "high",
+      "remote_hash": "5dd568f5a0581aebdba2ec22d716efe3cb228b665ba6c53e403348dc1f749ca0",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/events/{0}/detail",
+      "role": "checks",
+      "where": "events.py:637 \u2014 single-event detail view; uses _build_schedule_item_for_event to match my-schedule row shape (added 2026-05-09 to drop mySchedule coupling on the frontend)",
+      "confidence": "high",
+      "remote_hash": "94d516664832fa70778f933201cc640795cc2a8e685518f72bd17f7ea814a9df",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/profile/event-registrations",
+      "role": "checks",
+      "where": "profile.py:292 \u2014 registrations-only narrowed view (subset of my-schedule's coverage)",
+      "confidence": "medium",
+      "remote_hash": "3928fc5be61cfc1f5ca8869599f9fdab2d08e00396f7995dd57e2d4c6126c9ad",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/schedule/feed/{0}.ics",
+      "role": "serializes",
+      "where": "events.py:277 \u2014 ICS-format export with same scope as my-schedule",
+      "confidence": "high",
+      "remote_hash": "e023f3c9225cc0474db064fd29dd6bad1dda687c2767903c133ef98af63a4779",
+      "stale": false
+    }
+  ],
+  "fan_out": 4,
+  "confidence": "medium",
+  "source": "schedule review 2026-05-10 MEDIUM #5; commit 1b5d864 'detail page calls /api/events/{id}/detail, drops mySchedule coupling'",
+  "definition_status": "human_reviewed",
+  "structural_hash": "a56f93e5065ea58ca436fd1c8a7ff1e14f3099f00db6b7f6b11003ba6b1649de",
+  "dossier": "dossiers/rules/schedule__canonical_listing.md"
+}

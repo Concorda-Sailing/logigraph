@@ -1,22 +1,33 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-10T03:26:07.392561+00:00",
+  "generated_at": "2026-05-10T11:04:11.887732+00:00",
   "git_commit": "dd72f2f60a11",
-  "rule_count": 2,
-  "file_count": 6,
+  "rule_count": 4,
+  "file_count": 9,
   "by_file": {
     "concorda-api/models/event_crew.py": [
       "rule::event_crew::status_enum"
     ],
     "concorda-api/routers/boats.py": [
+      "rule::coowner::eligibility_at_accept",
       "rule::crew_visibility::peer_pii_resume_gated"
+    ],
+    "concorda-api/routers/calendar.py": [
+      "rule::schedule::canonical_listing"
     ],
     "concorda-api/routers/events.py": [
       "rule::crew_visibility::peer_pii_resume_gated",
-      "rule::event_crew::status_enum"
+      "rule::event_crew::status_enum",
+      "rule::schedule::canonical_listing"
+    ],
+    "concorda-api/routers/profile.py": [
+      "rule::schedule::canonical_listing"
     ],
     "concorda-api/schemas/event_crew.py": [
       "rule::event_crew::status_enum"
+    ],
+    "concorda-api/services/approvals.py": [
+      "rule::coowner::eligibility_at_accept"
     ],
     "concorda-api/services/visibility.py": [
       "rule::crew_visibility::peer_pii_resume_gated"

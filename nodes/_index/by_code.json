@@ -1,15 +1,30 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-10T03:26:07.392561+00:00",
+  "generated_at": "2026-05-10T11:04:11.887732+00:00",
   "git_commit": "dd72f2f60a11",
-  "rule_count": 2,
-  "target_count": 12,
+  "rule_count": 4,
+  "target_count": 18,
   "by_target": {
     "GET::/api/boats/{0}/crew/visible": [
       "rule::crew_visibility::peer_pii_resume_gated"
     ],
+    "GET::/api/events/my-schedule": [
+      "rule::schedule::canonical_listing"
+    ],
+    "GET::/api/events/{0}/detail": [
+      "rule::schedule::canonical_listing"
+    ],
     "GET::/api/events/{0}/sailing-event/crew": [
       "rule::crew_visibility::peer_pii_resume_gated"
+    ],
+    "GET::/api/profile/event-registrations": [
+      "rule::schedule::canonical_listing"
+    ],
+    "GET::/api/schedule/feed/{0}.ics": [
+      "rule::schedule::canonical_listing"
+    ],
+    "POST::/api/boats/{0}/coowner-invite": [
+      "rule::coowner::eligibility_at_accept"
     ],
     "POST::/api/events/{0}/sailing-event/crew-confirm": [
       "rule::event_crew::status_enum"
@@ -31,6 +46,9 @@
     ],
     "concorda-api::schemas/event_crew.py::EventCrewRead": [
       "rule::event_crew::status_enum"
+    ],
+    "concorda-api::services/approvals.py::cast_vote": [
+      "rule::coowner::eligibility_at_accept"
     ],
     "concorda-api::services/visibility.py::has_published_resume": [
       "rule::crew_visibility::peer_pii_resume_gated"

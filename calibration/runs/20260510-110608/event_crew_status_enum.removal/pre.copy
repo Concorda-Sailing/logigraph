@@ -1,0 +1,61 @@
+from enum import Enum
+
+from sqlalchemy import String, Boolean, Integer, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+from .base import BaseModel
+
+
+class EventCrewStatus(str, Enum):
+    """Canonical EventCrew lifecycle states.
+
+    Subclasses `str` so existing comparisons (`ec.status == "invited"`) and
+    DB writes continue to work — `EventCrewStatus.INVITED == "invited"` is
+    True. New code should reference enum members; old string literals will
+    be migrated incrementally.
+
+    Lifecycle (informal):
+      pool ──invite──▶ invited ──accept──▶ accepted ──confirm──▶ confirmed
+                          │
+                          └──decline──▶ declined
+
+      requested (from a self-nomination flow) ──accept/decline──▶ accepted/declined
+    """
+    POOL = "pool"
+    INVITED = "invited"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    CONFIRMED = "confirmed"
+    REQUESTED = "requested"
+
+
+class EventCrewRole(str, Enum):
+    """EventCrew role within the boat for a given event."""
+    MAIN = "main"
+    ALTERNATE = "alternate"
+
+
+class EventCrew(BaseModel):
+    """Per-event crew pool and assignment tracking."""
+    __tablename__ = "event_crew"
+    __table_args__ = (
+        UniqueConstraint("sailing_event_uuid", "person_uuid", name="uq_event_crew_event_person"),
+    )
+
+    sailing_event_uuid: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    person_uuid: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    boat_uuid: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    position_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Status column stays String(20) for backwards compatibility with
+    # existing rows. Use EventCrewStatus enum members in new code; values
+    # assigned to this column should always come from EventCrewStatus.
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=EventCrewStatus.POOL.value)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default=EventCrewRole.MAIN.value)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    self_selected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    invited_by_uuid: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    responded_by_uuid: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ics_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    def __init__(self, **kwargs):
+        super().__init__(type="EventCrew", **kwargs)
