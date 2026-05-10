@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "id": "rule::crew_visibility::peer_pii_resume_gated",
+  "kind": "rule",
+  "title": "Peer crew identity hidden unless resume is published",
+  "statement": "Peer crew members can view another crew member's identity (name, email, phone, picture) only if that person has published a sailing resume; boat owners and event managers always see unfiltered crew lists.",
+  "references_ontology": [
+    "role::relational::boat_owner"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "GET::/api/events/{0}/sailing-event/crew",
+      "role": "enforces",
+      "where": "events.py:2191; visibility filter in _event_crew_to_read at events.py:2235-2406",
+      "confidence": "high",
+      "remote_hash": "6201cef804dabb90a09149186e7d12ac874ff47a4542a91e6aa07eea2109e68a",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/boats/{0}/crew/visible",
+      "role": "enforces",
+      "where": "boats.py:293-334",
+      "confidence": "high",
+      "remote_hash": "3630b92d9b98e4fab736df7ca9c7af792044895e20eb9cad7e50fe54e6dc360b",
+      "stale": false
+    },
+    {
+      "depgraph_id": "concorda-web::src/app/members/schedule/[id]/page.tsx::ScheduleEventDetail",
+      "role": "displays",
+      "where": "page.tsx:953 \u2014 defensive `ec.resume_published === true` gate that mirrors the backend decision",
+      "confidence": "high",
+      "remote_hash": "bef5f6b19283c52139f707fbb0b69bb7cbb84229830b63b8f7bba5f8e5d65639",
+      "stale": false
+    }
+  ],
+  "fan_out": 3,
+  "confidence": "high",
+  "source": "memory/feedback_crew_visibility_privacy.md",
+  "definition_status": "human_reviewed",
+  "structural_hash": "9ebfaa367ee7dae1704435eb70cc714c30d6bd8b06c64c86e7716ade2158488b",
+  "dossier": "dossiers/rules/crew_visibility__peer_pii_resume_gated.md"
+}

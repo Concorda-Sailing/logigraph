@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-09T22:27:36.181196+00:00",
+  "git_commit": "23668de69b72",
+  "rule_count": 1,
+  "ontology_count": 1,
+  "by_ontology": {
+    "role::relational::boat_owner": [
+      "rule::crew_visibility::peer_pii_resume_gated"
+    ]
+  }
+}

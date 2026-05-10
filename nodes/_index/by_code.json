@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-09T22:27:36.181196+00:00",
+  "git_commit": "23668de69b72",
+  "rule_count": 1,
+  "target_count": 3,
+  "by_target": {
+    "GET::/api/boats/{0}/crew/visible": [
+      "rule::crew_visibility::peer_pii_resume_gated"
+    ],
+    "GET::/api/events/{0}/sailing-event/crew": [
+      "rule::crew_visibility::peer_pii_resume_gated"
+    ],
+    "concorda-web::src/app/members/schedule/[id]/page.tsx::ScheduleEventDetail": [
+      "rule::crew_visibility::peer_pii_resume_gated"
+    ]
+  }
+}

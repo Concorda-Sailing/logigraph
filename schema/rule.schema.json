@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "concorda.logigraph.rule",
+  "title": "Concorda logigraph rule node",
+  "description": "One node = one business rule. References ontology entities; claims depgraph code nodes that implement the rule. The plain-language statement and Decision table in the dossier are the canonical statement of meaning; the technical anchor is one implementation of it.",
+  "type": "object",
+  "required": ["schema_version", "id", "kind", "title", "statement", "references_ontology", "claims_code", "definition_status", "structural_hash"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^rule::[a-z_]+::[a-z0-9_]+$",
+      "description": "Form: rule::<category>::<short_name>. Example: rule::crew_visibility::peer_pii_resume_gated."
+    },
+    "kind": {
+      "const": "rule"
+    },
+    "title": {
+      "type": "string",
+      "description": "Short human-readable label. E.g. \"Peer crew identity hidden unless resume is published\"."
+    },
+    "statement": {
+      "type": "string",
+      "description": "Single-sentence plain-English rule. The full structured form (Decision table, examples, edge cases) lives in the dossier."
+    },
+    "references_ontology": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(role|resource|action|attribute)::[a-z_]+::[a-z0-9_]+$"
+      },
+      "minItems": 1,
+      "description": "Ontology node ids the rule mentions. Validated against nodes/ontology/ at regen time; missing ids are orphans."
+    },
+    "claims_code": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim" },
+      "minItems": 1,
+      "description": "Depgraph code nodes that implement this rule. At least one required — a rule with zero claims is unenforced."
+    },
+    "fan_out": {
+      "type": ["integer", "null"],
+      "description": "Computed at regen time: count of claims_code entries. Reported by bin/logigraph fan-out for refactor signals."
+    },
+    "confidence": {
+      "enum": ["high", "medium", "low"],
+      "description": "How confident the author is in the rule's accuracy. Low = forward-looking or speculative."
+    },
+    "source": {
+      "type": "string",
+      "description": "Where the rule was sourced from (memory file, design doc, code docstring)."
+    },
+    "definition_status": {
+      "enum": ["stub", "llm_drafted", "human_reviewed"]
+    },
+    "structural_hash": {
+      "type": "string",
+      "description": "SHA-256 over statement + references_ontology + claim ids. Drift triggers dossier re-review."
+    },
+    "dossier": {
+      "type": "string",
+      "description": "Path to the plain-language dossier markdown (relative to logigraph/)."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "claim": {
+      "type": "object",
+      "required": ["depgraph_id", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "depgraph_id": {
+          "type": "string",
+          "description": "Id of a node in the depgraph corpus. Validated at regen — missing ids are orphans."
+        },
+        "role": {
+          "enum": ["enforces", "checks", "serializes", "displays", "emits"],
+          "description": "How this code implements the rule. enforces=gate/filter, checks=predicate, serializes=response shape, displays=UI surface, emits=side-effect."
+        },
+        "where": {
+          "type": ["string", "null"],
+          "description": "File:line range where the rule lives in this node's source. E.g. \"events.py:2235-2406\"."
+        },
+        "confidence": {
+          "enum": ["high", "medium", "low"],
+          "default": "high"
+        },
+        "remote_hash": {
+          "type": ["string", "null"],
+          "description": "Copy of the depgraph node's structural_hash at last review. Drift between this and current hash flags the claim as stale."
+        },
+        "stale": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set by reconcile when remote_hash diverges from depgraph node. Surfaced by hooks; cleared by re-reviewing the claim."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "concorda.logigraph.ontology",
+  "title": "Concorda logigraph ontology node",
+  "description": "One node = one named concept in the system: a role (system or relational), a resource (Boat, EventCrew), an action (Accept, Promote), or an attribute (resume_published, status). Rules reference these nodes by id.",
+  "type": "object",
+  "required": ["schema_version", "id", "kind", "subkind", "title", "summary", "definition_status", "structural_hash"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2,
+      "description": "Logigraph nodes are schema_version: 2 to distinguish from depgraph (schema_version: 1)."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^(role|resource|action|attribute)::[a-z_]+::[a-z0-9_]+$",
+      "description": "Form: <subkind>::<category>::<short_name>. Example: role::relational::boat_owner. Stable; renames are explicit migrations."
+    },
+    "kind": {
+      "const": "ontology"
+    },
+    "subkind": {
+      "enum": ["role", "resource", "action", "attribute"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable label for the concept. E.g. \"Boat Owner\", \"EventCrew\", \"Accept\"."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One- or two-sentence plain-English description. Used for inline injection at edit time. Full structured definition lives in the dossier."
+    },
+    "source": {
+      "type": "object",
+      "description": "Where this concept comes from. For deterministically-extracted nodes (system roles, DB resources), points at the file/line. For authored relational roles and abstract concepts, names the predicate or describes the conceptual basis.",
+      "properties": {
+        "kind": {
+          "enum": ["system_role", "relational", "db_resource", "conceptual"]
+        },
+        "level": { "type": ["integer", "null"] },
+        "table": { "type": ["string", "null"] },
+        "predicate": { "type": ["string", "null"] },
+        "seeded_in": { "type": ["string", "null"] },
+        "defined_in": { "type": ["string", "null"] }
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Alternative names this concept is known by. E.g. role::system::org_admin has alias 'org_admin' (the bare DB string)."
+    },
+    "definition_status": {
+      "enum": ["stub", "llm_drafted", "human_reviewed"],
+      "description": "stub: extractor placeholder. llm_drafted: Claude wrote the dossier. human_reviewed: Logan signed off. Hooks skip stubs with a banner."
+    },
+    "structural_hash": {
+      "type": "string",
+      "description": "SHA-256 over canonical fields (id + summary + source + aliases). Bumping this signals dossier may need re-review."
+    },
+    "dossier": {
+      "type": "string",
+      "description": "Path to the plain-language dossier markdown (relative to logigraph/)."
+    },
+    "extractor": {
+      "type": ["string", "null"],
+      "description": "Which extractor produced this node, if any. Null for hand-authored concepts."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}
