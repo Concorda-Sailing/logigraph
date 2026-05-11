@@ -39,8 +39,16 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-LOGIGRAPH = Path(os.environ.get("CONCORDA_LOGIGRAPH_PATH", Path.home() / "concorda" / "logigraph")).resolve()
-DEPGRAPH = Path(os.environ.get("CONCORDA_DEPGRAPH_PATH", Path.home() / "concorda" / "depgraph")).resolve()
+LOGIGRAPH = Path(
+    os.environ.get("LOGIGRAPH_DATA_DIR")
+    or os.environ.get("CONCORDA_LOGIGRAPH_PATH")
+    or (Path.home() / "concorda" / "logigraph")
+).resolve()
+DEPGRAPH = Path(
+    os.environ.get("DEPGRAPH_DATA_DIR")
+    or os.environ.get("CONCORDA_DEPGRAPH_PATH")
+    or (Path.home() / "concorda" / "depgraph")
+).resolve()
 NODES = LOGIGRAPH / "nodes"
 INDEX_DIR = NODES / "_index"
 BY_CODE_INDEX = INDEX_DIR / "by_code.json"

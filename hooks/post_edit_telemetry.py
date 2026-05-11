@@ -35,7 +35,11 @@ import re
 import sys
 from pathlib import Path
 
-LOGIGRAPH = Path(os.environ.get("CONCORDA_LOGIGRAPH_PATH", Path.home() / "concorda" / "logigraph")).resolve()
+LOGIGRAPH = Path(
+    os.environ.get("LOGIGRAPH_DATA_DIR")
+    or os.environ.get("CONCORDA_LOGIGRAPH_PATH")
+    or (Path.home() / "concorda" / "logigraph")
+).resolve()
 TELEMETRY_DIR = LOGIGRAPH / "telemetry"
 INJECTIONS_LOG = TELEMETRY_DIR / "injections.jsonl"
 ACKS_LOG = TELEMETRY_DIR / "acknowledgments.jsonl"

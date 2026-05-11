@@ -26,8 +26,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-LOGIGRAPH = Path(os.environ.get("CONCORDA_LOGIGRAPH_PATH", Path.home() / "concorda" / "logigraph")).resolve()
-DEPGRAPH = Path(os.environ.get("CONCORDA_DEPGRAPH_PATH", Path.home() / "concorda" / "depgraph")).resolve()
+LOGIGRAPH = Path(
+    os.environ.get("LOGIGRAPH_DATA_DIR")
+    or os.environ.get("CONCORDA_LOGIGRAPH_PATH")
+    or (Path.home() / "concorda" / "logigraph")
+).resolve()
+DEPGRAPH = Path(
+    os.environ.get("DEPGRAPH_DATA_DIR")
+    or os.environ.get("CONCORDA_DEPGRAPH_PATH")
+    or (Path.home() / "concorda" / "depgraph")
+).resolve()
 NODES = LOGIGRAPH / "nodes"
 DOMAIN_DIR = NODES / "domain"
 RULES_DIR = NODES / "rules"
