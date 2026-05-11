@@ -44,8 +44,10 @@ BY_CODE_INDEX = INDEX_DIR / "by_code.json"
 BY_FILE_INDEX = INDEX_DIR / "by_file.json"
 BY_DOMAIN_INDEX = INDEX_DIR / "by_domain.json"
 CORPUS_META = NODES / "_meta.json"
-DOMAIN_SCHEMA = LOGIGRAPH / "schema" / "domain.schema.json"
-RULE_SCHEMA = LOGIGRAPH / "schema" / "rule.schema.json"
+# Schemas travel with the tool framework, not the per-project data.
+TOOL_ROOT = Path(__file__).resolve().parent.parent
+DOMAIN_SCHEMA = TOOL_ROOT / "schema" / "domain.schema.json"
+RULE_SCHEMA = TOOL_ROOT / "schema" / "rule.schema.json"
 TELEMETRY_DIR = LOGIGRAPH / "telemetry"
 INJECTIONS_LOG = TELEMETRY_DIR / "injections.jsonl"
 ACKS_LOG = TELEMETRY_DIR / "acknowledgments.jsonl"
