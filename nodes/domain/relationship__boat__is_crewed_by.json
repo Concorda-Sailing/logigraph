@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "id": "relationship::boat::is_crewed_by",
+  "kind": "domain",
+  "subkind": "relationship",
+  "title": "Boat is crewed by Person",
+  "summary": "A Boat has crew members for racing \u2014 distinct from ownership. Crew participation is per-race in practice (EventCrew on a SailingEvent), with optional boat-scoped saved crew pools that the captain draws from.",
+  "from": "resource::concorda::boat",
+  "to": "resource::concorda::person",
+  "predicate": "is crewed by",
+  "mediated_by": "boat_crew (role='crew') and event_crew (per-race)",
+  "cardinality": "0..many",
+  "lifecycle": "per-race / invite-cycle",
+  "definition_status": "human_reviewed",
+  "structural_hash": "f1565d4bb4488e981b7323e8cf99bd1cb95781576faa58182d814047e4ea1cb6",
+  "dossier": "dossiers/domain/relationship__boat__is_crewed_by.md",
+  "extractor": null
+}

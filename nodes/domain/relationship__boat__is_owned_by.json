@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "id": "relationship::boat::is_owned_by",
+  "kind": "domain",
+  "subkind": "relationship",
+  "title": "Boat is owned by Person",
+  "summary": "A Boat has one or more Boat Owners, mediated by BoatCrew rows with role='owner' and status='active'. The relationship is approval-gated: co-owners are added/removed via ApprovalRequest flows.",
+  "from": "resource::concorda::boat",
+  "to": "resource::concorda::person",
+  "predicate": "is owned by",
+  "mediated_by": "boat_crew (role='owner', status='active')",
+  "cardinality": "1..many",
+  "lifecycle": "approval-gated",
+  "definition_status": "human_reviewed",
+  "structural_hash": "912c81102d698d151345b12b3a4139e18e540c5a6c257b9ccfcdea87975a13a5",
+  "dossier": "dossiers/domain/relationship__boat__is_owned_by.md",
+  "extractor": null
+}

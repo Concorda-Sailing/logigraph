@@ -303,6 +303,39 @@ def write_corpus_meta(node_count: int, rule_count: int, domain_count: int) -> bo
     return _write_index(CORPUS_META, payload, stable_excludes=("generated_at", "started_at"))
 
 
+def detect_mediation_collisions(nodes: dict) -> list[tuple[str, list[str]]]:
+    """Group relationship entities by `mediated_by`. Any group with more
+    than one distinct relationship id is a *mediation collision*: two
+    conceptually-distinct relationships sharing the same storage / join /
+    predicate. That shared storage is the smoke signal for a domain
+    category error — e.g. ownership and crew membership both stored in
+    boat_crew.
+
+    Returns: list of (mediated_by, [relationship_ids]) for groups with
+    >1 distinct relationships.
+    """
+    by_mech: dict[str, list[str]] = {}
+    for nid, (_path, data) in nodes.items():
+        if data.get("kind") != "domain":
+            continue
+        if data.get("subkind") != "relationship":
+            continue
+        mech = data.get("mediated_by")
+        if not mech:
+            continue
+        # Normalize: strip parenthetical qualifiers so 'boat_crew (role=owner)'
+        # and 'boat_crew (role=crew)' both bucket as 'boat_crew'. The
+        # qualifier is exactly what distinguishes the use — collision is the
+        # point.
+        head = mech.split("(", 1)[0].strip().rstrip(",").lower()
+        # If multiple mechanisms are listed ('A and B'), bucket under each.
+        for piece in [p.strip() for p in head.split(" and ")]:
+            if not piece:
+                continue
+            by_mech.setdefault(piece, []).append(nid)
+    return [(m, sorted(ids)) for m, ids in sorted(by_mech.items()) if len(set(ids)) > 1]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--report-only", action="store_true")
@@ -353,6 +386,13 @@ def main() -> int:
         print(f"  {rid} → {cid}")
     if len(stale_claims) > 10:
         print(f"  ... and {len(stale_claims) - 10} more")
+
+    collisions = detect_mediation_collisions(nodes)
+    print(f"mediation coll.:  {len(collisions)}")
+    for mech, ids in collisions:
+        print(f"  ⚠ `{mech}` mediates {len(ids)} distinct relationships:")
+        for rid in ids:
+            print(f"      - {rid}")
 
     if args.strict and (orphan_claims or orphan_domain):
         return 1

@@ -14,14 +14,41 @@
     },
     "id": {
       "type": "string",
-      "pattern": "^(role|resource|action|attribute)::[a-z_]+::[a-z0-9_]+$",
-      "description": "Form: <subkind>::<category>::<short_name>. Example: role::relational::boat_owner. Stable; renames are explicit migrations."
+      "pattern": "^(role|resource|action|attribute|relationship)::[a-z_]+::[a-z0-9_]+$",
+      "description": "Form: <subkind>::<category>::<short_name>. Example: role::relational::boat_owner, relationship::boat::is_owned_by. Stable; renames are explicit migrations."
     },
     "kind": {
       "const": "domain"
     },
     "subkind": {
-      "enum": ["role", "resource", "action", "attribute"]
+      "enum": ["role", "resource", "action", "attribute", "relationship"]
+    },
+    "from": {
+      "type": "string",
+      "pattern": "^(role|resource|action|attribute)::[a-z_]+::[a-z0-9_]+$",
+      "description": "Required when subkind=relationship. Source domain entity id."
+    },
+    "to": {
+      "type": "string",
+      "pattern": "^(role|resource|action|attribute)::[a-z_]+::[a-z0-9_]+$",
+      "description": "Required when subkind=relationship. Target domain entity id."
+    },
+    "predicate": {
+      "type": "string",
+      "description": "Required when subkind=relationship. Plain-English statement of the relationship, e.g. 'is owned by', 'is registered for'."
+    },
+    "mediated_by": {
+      "type": "string",
+      "description": "Required when subkind=relationship. The concrete mechanism that realizes the relationship — a table name, a join, a row predicate. Mediation collisions across distinct relationships are flagged at regen as design-defect signals."
+    },
+    "cardinality": {
+      "type": "string",
+      "enum": ["1..1", "1..many", "many..many", "0..1", "0..many"],
+      "description": "Required when subkind=relationship. How many of `to` per `from` (and back)."
+    },
+    "lifecycle": {
+      "type": "string",
+      "description": "Required when subkind=relationship. How the relationship comes and goes — e.g. 'approval-gated', 'per-race', 'set-at-creation', 'mutable-by-owner'."
     },
     "title": {
       "type": "string",
@@ -77,5 +104,11 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "subkind": { "const": "relationship" } }, "required": ["subkind"] },
+      "then": { "required": ["from", "to", "predicate", "mediated_by", "cardinality", "lifecycle"] }
+    }
+  ]
 }
