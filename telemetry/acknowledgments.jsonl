@@ -64,3 +64,6 @@
 {"ts": "2026-05-11T12:31:51.114554+00:00", "kind": "acknowledgment", "rule_id": "rule::schedule::canonical_listing", "matched_phrase": "rule::schedule::canonical_listing"}
 {"ts": "2026-05-11T12:31:51.114751+00:00", "kind": "acknowledgment", "rule_id": "rule::event_crew::status_enum", "matched_phrase": "rule::event_crew::status_enum"}
 {"ts": "2026-05-11T12:31:51.114775+00:00", "kind": "acknowledgment", "rule_id": "rule::crew_visibility::peer_pii_resume_gated", "matched_phrase": "rule::crew_visibility::peer_pii_resume_gated"}
+{"ts": "2026-05-11T12:34:24.777667+00:00", "kind": "acknowledgment", "rule_id": "rule::schedule::canonical_listing", "matched_phrase": "rule::schedule::canonical_listing"}
+{"ts": "2026-05-11T12:34:24.777984+00:00", "kind": "acknowledgment", "rule_id": "rule::event_crew::status_enum", "matched_phrase": "rule::event_crew::status_enum"}
+{"ts": "2026-05-11T12:34:24.778015+00:00", "kind": "acknowledgment", "rule_id": "rule::crew_visibility::peer_pii_resume_gated", "matched_phrase": "rule::crew_visibility::peer_pii_resume_gated"}
