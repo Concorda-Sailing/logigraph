@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "concorda.logigraph.rule",
   "title": "Concorda logigraph rule node",
-  "description": "One node = one business rule. References ontology entities; claims depgraph code nodes that implement the rule. The plain-language statement and Decision table in the dossier are the canonical statement of meaning; the technical anchor is one implementation of it.",
+  "description": "One node = one business rule. References domain entities; claims depgraph code nodes that implement the rule. The plain-language statement and Decision table in the dossier are the canonical statement of meaning; the technical anchor is one implementation of it.",
   "type": "object",
   "required": ["schema_version", "id", "kind", "title", "statement", "references_domain", "claims_code", "definition_status", "structural_hash"],
   "additionalProperties": false,
@@ -34,7 +34,7 @@
         "pattern": "^(role|resource|action|attribute)::[a-z_]+::[a-z0-9_]+$"
       },
       "minItems": 1,
-      "description": "Ontology node ids the rule mentions. Validated against nodes/ontology/ at regen time; missing ids are orphans."
+      "description": "Domain node ids the rule mentions. Validated against nodes/domain/ at regen time; missing ids are orphans."
     },
     "claims_code": {
       "type": "array",

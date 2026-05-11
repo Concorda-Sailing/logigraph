@@ -133,7 +133,7 @@ def mark_regen_in_progress() -> None:
 
 def cmd_regen(args: argparse.Namespace) -> int:
     mark_regen_in_progress()
-    rc = subprocess.call(["python3", str(LOGIGRAPH / "extractors" / "reconcile.py")])
+    rc = subprocess.call(["python3", str(TOOL_ROOT / "extractors" / "reconcile.py")])
     return 0 if rc == 0 else 1
 
 
