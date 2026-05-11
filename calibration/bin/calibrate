@@ -39,7 +39,11 @@ import shutil
 import sys
 from pathlib import Path
 
-CALIBRATION = Path(os.environ.get("CONCORDA_LOGIGRAPH_PATH", Path.home() / "concorda" / "logigraph")) / "calibration"
+TOOL_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(TOOL_ROOT))
+from lib.config import resolve_data_dir  # noqa: E402
+
+CALIBRATION = resolve_data_dir("LOGIGRAPH_DATA_DIR") / "calibration"
 PROMPTS_DIR = CALIBRATION / "prompts"
 RUNS_DIR = CALIBRATION / "runs"
 

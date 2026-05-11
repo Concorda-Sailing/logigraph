@@ -38,16 +38,28 @@ import re
 import sys
 from pathlib import Path
 
-LOGIGRAPH = Path(
-    os.environ.get("LOGIGRAPH_DATA_DIR")
-    or os.environ.get("CONCORDA_LOGIGRAPH_PATH")
-    or (Path.home() / "concorda" / "logigraph")
-).resolve()
-DEPGRAPH = Path(
-    os.environ.get("DEPGRAPH_DATA_DIR")
-    or os.environ.get("CONCORDA_DEPGRAPH_PATH")
-    or (Path.home() / "concorda" / "depgraph")
-).resolve()
+TOOL_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(TOOL_ROOT))
+from lib.config import resolve_data_dir, load_project_config, repo_basenames  # noqa: E402
+
+LOGIGRAPH = resolve_data_dir("LOGIGRAPH_DATA_DIR")
+
+
+def _depgraph_dir() -> Path:
+    env = os.environ.get("DEPGRAPH_DATA_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    cfg = load_project_config(LOGIGRAPH)
+    dg = (cfg.get("depgraph") or {}).get("data_dir")
+    if dg:
+        return Path(dg).expanduser().resolve()
+    raise SystemExit(
+        "Cannot locate depgraph data dir: set DEPGRAPH_DATA_DIR or add "
+        "[depgraph] data_dir = \"...\" to logigraph's project.toml."
+    )
+
+
+DEPGRAPH = _depgraph_dir()
 NODES = LOGIGRAPH / "nodes"
 RULES_DIR = NODES / "rules"
 DOMAIN_DIR = NODES / "domain"
@@ -112,7 +124,8 @@ def target_files(tool_name: str, tool_input: dict) -> list[str]:
 
 
 def repo_relative(abs_path: str) -> tuple[str, str] | None:
-    """Decompose home-rooted absolute path into (repo, rel)."""
+    """Decompose home-rooted absolute path into (repo, rel) when the home-
+    relative first segment is a configured [repos.*] basename."""
     home = str(Path.home())
     p = Path(abs_path).expanduser().resolve()
     parts = p.parts
@@ -122,7 +135,7 @@ def repo_relative(abs_path: str) -> tuple[str, str] | None:
     if parts[: len(home_parts)] != home_parts:
         return None
     seg = parts[len(home_parts)]
-    if not seg.startswith("concorda"):
+    if seg not in repo_basenames(LOGIGRAPH):
         return None
     rel = "/".join(parts[len(home_parts) + 1 :])
     return seg, rel

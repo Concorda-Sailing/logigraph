@@ -39,16 +39,33 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-LOGIGRAPH = Path(
-    os.environ.get("LOGIGRAPH_DATA_DIR")
-    or os.environ.get("CONCORDA_LOGIGRAPH_PATH")
-    or (Path.home() / "concorda" / "logigraph")
-).resolve()
-DEPGRAPH = Path(
-    os.environ.get("DEPGRAPH_DATA_DIR")
-    or os.environ.get("CONCORDA_DEPGRAPH_PATH")
-    or (Path.home() / "concorda" / "depgraph")
-).resolve()
+TOOL_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(TOOL_ROOT))
+from lib.config import resolve_data_dir, primary_repo_path, load_project_config  # noqa: E402
+
+LOGIGRAPH = resolve_data_dir("LOGIGRAPH_DATA_DIR")
+
+
+def _depgraph_dir() -> Path:
+    """Logigraph claims against a depgraph corpus. Source priority:
+       1. DEPGRAPH_DATA_DIR env var
+       2. [depgraph].data_dir from logigraph's project.toml
+       3. SystemExit (caller can't proceed without it)
+    """
+    env = os.environ.get("DEPGRAPH_DATA_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    cfg = load_project_config(LOGIGRAPH)
+    dg = (cfg.get("depgraph") or {}).get("data_dir")
+    if dg:
+        return Path(dg).expanduser().resolve()
+    raise SystemExit(
+        "Cannot locate depgraph data dir: set DEPGRAPH_DATA_DIR or add "
+        "[depgraph] data_dir = \"...\" to logigraph's project.toml."
+    )
+
+
+DEPGRAPH = _depgraph_dir()
 NODES = LOGIGRAPH / "nodes"
 INDEX_DIR = NODES / "_index"
 BY_CODE_INDEX = INDEX_DIR / "by_code.json"
@@ -226,14 +243,20 @@ def build_indexes(
     )
 
 
-def _git_head_concorda() -> str | None:
-    head = Path.home() / "concorda-api" / ".git" / "HEAD"
+def _git_head_primary() -> str | None:
+    """Return the first 12 chars of the primary repo's git HEAD, or None.
+    Primary repo is determined by [project] primary_repo in project.toml,
+    falling back to the first [repos.*] table."""
+    repo_path = primary_repo_path(LOGIGRAPH)
+    if repo_path is None:
+        return None
+    head = repo_path / ".git" / "HEAD"
     if not head.exists():
         return None
     try:
         ref = head.read_text().strip()
         if ref.startswith("ref:"):
-            ref_path = Path.home() / "concorda-api" / ".git" / ref.split(" ", 1)[1]
+            ref_path = repo_path / ".git" / ref.split(" ", 1)[1]
             if ref_path.exists():
                 return ref_path.read_text().strip()[:12]
         return ref[:12]
@@ -265,7 +288,7 @@ def write_indexes(by_code: dict, by_file: dict, by_domain: dict, rule_count: int
     """Write the three reverse-edge index files. Returns (changed_code,
     changed_file, changed_domain)."""
     now = datetime.now(timezone.utc).isoformat()
-    git = _git_head_concorda()
+    git = _git_head_primary()
 
     code_payload = {
         "schema_version": INDEX_SCHEMA_VERSION,
@@ -303,7 +326,7 @@ def write_corpus_meta(node_count: int, rule_count: int, domain_count: int) -> bo
         "schema_version": META_SCHEMA_VERSION,
         "regen_status": "complete",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "git_commit": _git_head_concorda(),
+        "git_commit": _git_head_primary(),
         "node_count": node_count,
         "rule_count": rule_count,
         "domain_count": domain_count,

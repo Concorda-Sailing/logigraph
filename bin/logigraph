@@ -26,16 +26,34 @@ import subprocess
 import sys
 from pathlib import Path
 
-LOGIGRAPH = Path(
-    os.environ.get("LOGIGRAPH_DATA_DIR")
-    or os.environ.get("CONCORDA_LOGIGRAPH_PATH")
-    or (Path.home() / "concorda" / "logigraph")
-).resolve()
-DEPGRAPH = Path(
-    os.environ.get("DEPGRAPH_DATA_DIR")
-    or os.environ.get("CONCORDA_DEPGRAPH_PATH")
-    or (Path.home() / "concorda" / "depgraph")
-).resolve()
+# Schemas + lib/ travel with the tool framework, not the per-project data.
+TOOL_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(TOOL_ROOT))
+from lib.config import resolve_data_dir, load_project_config, repo_basenames  # noqa: E402
+
+LOGIGRAPH = resolve_data_dir("LOGIGRAPH_DATA_DIR")
+
+
+def _depgraph_dir() -> Path:
+    """Logigraph claims against a depgraph corpus. Source priority:
+       1. DEPGRAPH_DATA_DIR env var
+       2. [depgraph].data_dir in logigraph's project.toml
+       3. SystemExit.
+    """
+    env = os.environ.get("DEPGRAPH_DATA_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    cfg = load_project_config(LOGIGRAPH)
+    dg = (cfg.get("depgraph") or {}).get("data_dir")
+    if dg:
+        return Path(dg).expanduser().resolve()
+    raise SystemExit(
+        "Cannot locate depgraph data dir: set DEPGRAPH_DATA_DIR or add "
+        "[depgraph] data_dir = \"...\" to logigraph's project.toml."
+    )
+
+
+DEPGRAPH = _depgraph_dir()
 NODES = LOGIGRAPH / "nodes"
 DOMAIN_DIR = NODES / "domain"
 RULES_DIR = NODES / "rules"
@@ -44,8 +62,6 @@ BY_CODE_INDEX = INDEX_DIR / "by_code.json"
 BY_FILE_INDEX = INDEX_DIR / "by_file.json"
 BY_DOMAIN_INDEX = INDEX_DIR / "by_domain.json"
 CORPUS_META = NODES / "_meta.json"
-# Schemas travel with the tool framework, not the per-project data.
-TOOL_ROOT = Path(__file__).resolve().parent.parent
 DOMAIN_SCHEMA = TOOL_ROOT / "schema" / "domain.schema.json"
 RULE_SCHEMA = TOOL_ROOT / "schema" / "rule.schema.json"
 TELEMETRY_DIR = LOGIGRAPH / "telemetry"
@@ -420,8 +436,8 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
 
 def repo_relative(abs_path: str) -> tuple[str, str] | None:
-    """Same shape as depgraph's helper. /home/lgreenlee/concorda-api/foo/bar.py
-    → ('concorda-api', 'foo/bar.py')."""
+    """Same shape as depgraph's helper. /home/lgreenlee/<repo>/foo/bar.py
+    → ('<repo>', 'foo/bar.py') if <repo> is a configured [repos.*] path."""
     home = str(Path.home())
     p = Path(abs_path).expanduser().resolve()
     parts = p.parts
@@ -431,7 +447,7 @@ def repo_relative(abs_path: str) -> tuple[str, str] | None:
     if parts[: len(home_parts)] != home_parts:
         return None
     seg = parts[len(home_parts)]
-    if not seg.startswith("concorda"):
+    if seg not in repo_basenames(LOGIGRAPH):
         return None
     rel = "/".join(parts[len(home_parts) + 1 :])
     return seg, rel
@@ -449,8 +465,8 @@ def find_rules_for_target(target: str) -> list[str]:
     idx = json.loads(BY_FILE_INDEX.read_text())
     rr = repo_relative(target)
     if not rr:
-        # try treating as repo-relative directly
-        for repo_name in ("concorda-api", "concorda-web", "concorda-test", "concorda-expo"):
+        # try treating as repo-relative directly against each configured repo
+        for repo_name in repo_basenames(LOGIGRAPH):
             cand = Path.home() / repo_name / target
             if cand.exists():
                 rr = (repo_name, target)
