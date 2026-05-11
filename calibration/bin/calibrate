@@ -122,7 +122,7 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 PROMPT_WRAPPER_TEMPLATE = """\
-You are working in the Concorda codebase. The user (Logan) has asked for a code change:
+You are working in the user's codebase. The user has asked for a code change:
 
 > {prompt_body}
 

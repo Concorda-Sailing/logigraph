@@ -10,7 +10,7 @@ it enforces).
 
 ## Why
 
-Concorda already has tools that catch regression and structural drift
+Most projects already have tools that catch regression and structural drift
 (tests, types, lint, architecture tests, code review). What those tools
 *cannot* do is hand a fresh-session LLM the **intent** behind the code:
 which duplications are intentional, which naming choices grandfather
@@ -66,7 +66,7 @@ logigraph/
 │   ├── domain/        plain-language definitions of concepts
 │   └── rules/           plain-language statements of rules
 ├── extractors/
-│   ├── extract_system_roles.py     reads concorda-api/scripts/seed_roles.py
+│   ├── extract_system_roles.py     reads <api-repo>/scripts/seed_roles.py
 │   ├── extract_db_resources.py     walks SQLAlchemy models
 │   └── reconcile.py                builds indexes, validates claims
 ├── schema/

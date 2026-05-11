@@ -15,7 +15,7 @@ Schema (per-repo tables, mandatory):
     files_arg = "--only"                                  # optional str
 
 Substitutions available in `extractor` tokens:
-    {data_dir}  — the framework data dir (e.g. ~/concorda/depgraph)
+    {data_dir}  — the framework data dir (e.g. ~/<project>/depgraph)
     {path}      — the repo's resolved path
 """
 
@@ -86,7 +86,7 @@ def project_repos(data_dir: Path) -> dict[str, dict]:
                          "files_arg": str | None}}
 
     The repo_key is the [repos.<key>] table name (e.g. "api").
-    The basename is the final path segment (e.g. "concorda-api"), used
+    The basename is the final path segment (e.g. "<project>-api"), used
     for home-relative path matching when classifying file paths.
 
     Raises ValueError if [repos.*] is present but malformed.
@@ -152,12 +152,12 @@ def render_extractor(repo_info: dict, data_dir: Path) -> Optional[list[str]]:
 
 def repo_basenames(data_dir: Path) -> set[str]:
     """Convenience: the set of repo basenames, for path-matching like
-    `seg == basename` in place of the old `seg.startswith('concorda')`."""
+    `seg == basename` in place of project-name string-prefix matching."""
     return {r["basename"] for r in project_repos(data_dir).values()}
 
 
 def repo_for_basename(data_dir: Path, basename: str) -> Optional[dict]:
-    """Look up a repo_info by its basename (e.g. 'concorda-api')."""
+    """Look up a repo_info by its basename (e.g. '<project>-api')."""
     for info in project_repos(data_dir).values():
         if info["basename"] == basename:
             return info

@@ -598,7 +598,7 @@ def cmd_rule_stub(args: argparse.Namespace) -> int:
             "remote_hash": "",
             "stale": False,
         })
-    domain_refs = args.domain_ref or ["resource::concorda::TODO"]
+    domain_refs = args.domain_ref or ["resource::project::TODO"]
     import hashlib as _h
     structural_hash = _h.sha256(rule_id.encode()).hexdigest()
     node = {
@@ -814,13 +814,19 @@ def cmd_rule_bump(args: argparse.Namespace) -> int:
 
 
 def cmd_self_check(args: argparse.Namespace) -> int:
-    """Run the PreToolUse hook against a fake payload and print stdout."""
+    """Run the PreToolUse hook against a fake payload and print stdout.
+    Path is synthesized from the first configured [repos.*] table."""
+    from lib.config import project_repos as _project_repos
+    repos = _project_repos(LOGIGRAPH)
+    if not repos:
+        print("self-check: no [repos.*] configured in project.toml", file=sys.stderr)
+        return 1
+    first = next(iter(repos.values()))
+    sample_path = first["path"] / "self-check-fake.py"
     payload = json.dumps(
         {
             "tool_name": "Edit",
-            "tool_input": {
-                "file_path": str(Path.home() / "concorda-api" / "routers" / "events.py")
-            },
+            "tool_input": {"file_path": str(sample_path)},
         }
     )
     proc = subprocess.run(

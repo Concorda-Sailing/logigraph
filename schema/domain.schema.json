@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "concorda.logigraph.domain",
-  "title": "Concorda logigraph domain entity",
+  "$id": "logigraph.domain",
+  "title": "Logigraph domain entity",
   "description": "One node = one named concept in the system: a role (system or relational), a resource (Boat, EventCrew), an action (Accept, Promote), or an attribute (resume_published, status). Rules reference these nodes by id.",
   "type": "object",
   "required": ["schema_version", "id", "kind", "subkind", "title", "summary", "definition_status", "structural_hash"],

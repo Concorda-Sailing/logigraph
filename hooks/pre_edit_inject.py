@@ -42,6 +42,12 @@ TOOL_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_ROOT))
 from lib.config import resolve_data_dir, load_project_config, repo_basenames  # noqa: E402
 
+
+def _project_name() -> str:
+    """Project name from project.toml [project].name, or '' if unset."""
+    cfg = load_project_config(LOGIGRAPH)
+    return (cfg.get("project") or {}).get("name", "")
+
 LOGIGRAPH = resolve_data_dir("LOGIGRAPH_DATA_DIR")
 
 
@@ -496,8 +502,9 @@ def main() -> int:
     if not blocks:
         return 0
 
+    project_name = _project_name()
     body = (
-        "# 🧭 Concorda logigraph context\n\n"
+        (f"# 🧭 {project_name} logigraph context\n\n" if project_name else "# 🧭 logigraph context\n\n")
         + "_Rules and domain that apply to the file you're about to edit. "
         "These describe **intent** — what the system means and why — that "
         "tests/types/lint cannot tell you._\n\n"
