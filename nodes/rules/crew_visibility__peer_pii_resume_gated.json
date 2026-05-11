@@ -4,9 +4,6 @@
   "kind": "rule",
   "title": "Peer crew identity hidden unless resume is published",
   "statement": "Peer crew members can view another crew member's identity (name, email, phone, picture) only if that person has published a sailing resume; boat owners and event managers always see unfiltered crew lists.",
-  "references_ontology": [
-    "role::relational::boat_owner"
-  ],
   "claims_code": [
     {
       "depgraph_id": "concorda-api::services/visibility.py::has_published_resume",
@@ -54,5 +51,8 @@
   "source": "memory/feedback_crew_visibility_privacy.md; helper extraction recorded 2026-05-10",
   "definition_status": "human_reviewed",
   "structural_hash": "a03364b2b93fdf09058aa3b12639cc8ee85f4212f52d09f18cf03d13e0107837",
-  "dossier": "dossiers/rules/crew_visibility__peer_pii_resume_gated.md"
+  "dossier": "dossiers/rules/crew_visibility__peer_pii_resume_gated.md",
+  "references_domain": [
+    "role::relational::boat_owner"
+  ]
 }

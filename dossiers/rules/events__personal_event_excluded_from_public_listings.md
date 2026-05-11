@@ -142,4 +142,4 @@ The slug-NULL invariant must hold at insert time.
 - **Category constant**: `concorda-api/models/event.py::Event.CATEGORY_PERSONAL` (use this, not the literal string).
 - **Slug normalization**: `Event.__init__` — sets `slug = None` when category is personal.
 - **History anchor commits**: `4fd165d` (slug fix), `7570175` → `57f2e00` → `b887b73` (filter regression cycle).
-- **Adjacent ontology**: `resource::concorda::event`, `role::system::member`.
+- **Adjacent domain**: `resource::concorda::event`, `role::system::member`.

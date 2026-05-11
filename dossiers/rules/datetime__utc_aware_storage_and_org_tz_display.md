@@ -173,5 +173,5 @@ without one.
 - **Adjacent memory**: `feedback_naive_datetime_convention.md`,
   `feedback_timezone_helpers_mandatory.md` — the user-facing
   conventions; this rule formalizes them.
-- **Adjacent ontology**: `resource::concorda::event`,
+- **Adjacent domain**: `resource::concorda::event`,
   `resource::concorda::organization`.

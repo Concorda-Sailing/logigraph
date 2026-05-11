@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "id": "role::system::member",
+  "kind": "domain",
+  "subkind": "role",
+  "title": "Member",
+  "summary": "The baseline authenticated user. Every registered Person holds this role implicitly. Grants access to the member portal and the self-service profile/calendar/crew flows.",
+  "source": {
+    "kind": "system_role",
+    "level": 0,
+    "table": "Role",
+    "seeded_in": "concorda-api/migrations/",
+    "defined_in": "concorda-api/models/role.py"
+  },
+  "aliases": [
+    "member",
+    "user",
+    "authenticated_user"
+  ],
+  "definition_status": "human_reviewed",
+  "structural_hash": "e4a380ec304f782e07a657e682597ea16734513370d574732cfa2bfb843ade9d",
+  "dossier": "dossiers/domain/role__system__member.md",
+  "extractor": null
+}

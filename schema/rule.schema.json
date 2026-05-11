@@ -4,7 +4,7 @@
   "title": "Concorda logigraph rule node",
   "description": "One node = one business rule. References ontology entities; claims depgraph code nodes that implement the rule. The plain-language statement and Decision table in the dossier are the canonical statement of meaning; the technical anchor is one implementation of it.",
   "type": "object",
-  "required": ["schema_version", "id", "kind", "title", "statement", "references_ontology", "claims_code", "definition_status", "structural_hash"],
+  "required": ["schema_version", "id", "kind", "title", "statement", "references_domain", "claims_code", "definition_status", "structural_hash"],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
@@ -27,7 +27,7 @@
       "type": "string",
       "description": "Single-sentence plain-English rule. The full structured form (Decision table, examples, edge cases) lives in the dossier."
     },
-    "references_ontology": {
+    "references_domain": {
       "type": "array",
       "items": {
         "type": "string",
@@ -59,7 +59,7 @@
     },
     "structural_hash": {
       "type": "string",
-      "description": "SHA-256 over statement + references_ontology + claim ids. Drift triggers dossier re-review."
+      "description": "SHA-256 over statement + references_domain + claim ids. Drift triggers dossier re-review."
     },
     "dossier": {
       "type": "string",

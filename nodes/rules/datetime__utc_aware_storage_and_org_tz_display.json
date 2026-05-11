@@ -4,10 +4,6 @@
   "kind": "rule",
   "title": "Datetimes are UTC-aware at rest, org-tz at the surface",
   "statement": "All datetime columns use the UtcDateTime SQLAlchemy type (naive-as-UTC stored, aware on read); UI rendering goes through formatInOrgTz / ymdInOrgTz; <input type='datetime-local'> save paths funnel through orgInputToUtcIso. No raw Date.getHours, toLocaleString without timeZone, or new Date().toISOString().slice() shortcuts in production code paths.",
-  "references_ontology": [
-    "resource::concorda::event",
-    "resource::concorda::organization"
-  ],
   "claims_code": [
     {
       "depgraph_id": "concorda-web::src/lib/datetime.ts::formatInOrgTz",
@@ -55,5 +51,9 @@
   "source": "memory feedback_naive_datetime_convention; memory feedback_timezone_helpers_mandatory; 2026-05-07 audit found ~30 components drifting; pre-2026-05-06 imports have ~5h drift",
   "definition_status": "human_reviewed",
   "structural_hash": "692694c3794270f9ed59522eb5770fe9fdd424a8343d759fdcafaecd7bdcd120",
-  "dossier": "dossiers/rules/datetime__utc_aware_storage_and_org_tz_display.md"
+  "dossier": "dossiers/rules/datetime__utc_aware_storage_and_org_tz_display.md",
+  "references_domain": [
+    "resource::concorda::event",
+    "resource::concorda::organization"
+  ]
 }

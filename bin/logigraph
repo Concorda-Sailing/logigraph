@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-logigraph — CLI for the rule + ontology graph.
+logigraph — CLI for the rule + domain graph.
 
 Subcommands:
   regen                       Run extractors and reconcile (build indexes,
@@ -9,7 +9,7 @@ Subcommands:
   validate                    JSON-Schema check + dossier section check.
   rules-for <depgraph-id>     List rules that claim a depgraph node.
   fan-out [--threshold N]     Rank rules by claim count (refactor signal).
-  gaps                        Orphan rules / orphan ontology refs / stale
+  gaps                        Orphan rules / orphan domain refs / stale
                               claims.
   dossiers --status           [Backwards-compat alias for `stats`.]
   stats [--telemetry]         Curation backlog + optional injection metrics.
@@ -29,14 +29,14 @@ from pathlib import Path
 LOGIGRAPH = Path(os.environ.get("CONCORDA_LOGIGRAPH_PATH", Path.home() / "concorda" / "logigraph")).resolve()
 DEPGRAPH = Path(os.environ.get("CONCORDA_DEPGRAPH_PATH", Path.home() / "concorda" / "depgraph")).resolve()
 NODES = LOGIGRAPH / "nodes"
-ONTOLOGY_DIR = NODES / "ontology"
+DOMAIN_DIR = NODES / "domain"
 RULES_DIR = NODES / "rules"
 INDEX_DIR = NODES / "_index"
 BY_CODE_INDEX = INDEX_DIR / "by_code.json"
 BY_FILE_INDEX = INDEX_DIR / "by_file.json"
-BY_ONTOLOGY_INDEX = INDEX_DIR / "by_ontology.json"
+BY_DOMAIN_INDEX = INDEX_DIR / "by_domain.json"
 CORPUS_META = NODES / "_meta.json"
-ONTOLOGY_SCHEMA = LOGIGRAPH / "schema" / "ontology.schema.json"
+DOMAIN_SCHEMA = LOGIGRAPH / "schema" / "domain.schema.json"
 RULE_SCHEMA = LOGIGRAPH / "schema" / "rule.schema.json"
 TELEMETRY_DIR = LOGIGRAPH / "telemetry"
 INJECTIONS_LOG = TELEMETRY_DIR / "injections.jsonl"
@@ -47,7 +47,7 @@ REQUIRED_RULE_DOSSIER_SECTIONS = (
     "## Why it exists",
     "## Decision table",
 )
-REQUIRED_ONTOLOGY_ROLE_DOSSIER_SECTIONS = (
+REQUIRED_DOMAIN_ROLE_DOSSIER_SECTIONS = (
     "## Plain definition",
     "## They can",
 )
@@ -158,8 +158,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     for nid, (path, data) in nodes.items():
         kind = data.get("kind")
-        if kind == "ontology":
-            err = _validate_json_schema(data, ONTOLOGY_SCHEMA)
+        if kind == "domain":
+            err = _validate_json_schema(data, DOMAIN_SCHEMA)
             if err:
                 print(f"INVALID {path}: {err}", file=sys.stderr)
                 bad += 1
@@ -169,7 +169,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 if dossier_rel:
                     missing = _check_dossier_sections(
                         LOGIGRAPH / dossier_rel,
-                        REQUIRED_ONTOLOGY_ROLE_DOSSIER_SECTIONS,
+                        REQUIRED_DOMAIN_ROLE_DOSSIER_SECTIONS,
                     )
                     if missing and data.get("definition_status") != "stub":
                         print(f"DOSSIER {path}: missing sections {missing}", file=sys.stderr)
@@ -239,20 +239,20 @@ def cmd_fan_out(args: argparse.Namespace) -> int:
 
 def cmd_gaps(args: argparse.Namespace) -> int:
     nodes = load_all_nodes()
-    ontology_ids = {nid for nid, (_, d) in nodes.items() if d.get("kind") == "ontology"}
+    domain_ids = {nid for nid, (_, d) in nodes.items() if d.get("kind") == "domain"}
     depgraph_corpus = load_depgraph_corpus()
     depgraph_ids = set(depgraph_corpus.keys())
 
     orphan_claims: list[tuple[str, str]] = []
-    orphan_ontology_refs: list[tuple[str, str]] = []
+    orphan_domain_refs: list[tuple[str, str]] = []
     stale_claims: list[tuple[str, str]] = []
 
     for nid, (_, data) in nodes.items():
         if data.get("kind") != "rule":
             continue
-        for ref in data.get("references_ontology", []):
-            if ref not in ontology_ids:
-                orphan_ontology_refs.append((nid, ref))
+        for ref in data.get("references_domain", []):
+            if ref not in domain_ids:
+                orphan_domain_refs.append((nid, ref))
         for claim in data.get("claims_code", []):
             cid = claim.get("depgraph_id")
             if cid not in depgraph_ids:
@@ -267,16 +267,16 @@ def cmd_gaps(args: argparse.Namespace) -> int:
         print(f"ORPHAN CLAIMS ({len(orphan_claims)}):")
         for rule_id, claim_id in orphan_claims:
             print(f"  {rule_id} → {claim_id}")
-    if orphan_ontology_refs:
-        print(f"ORPHAN ONTOLOGY REFS ({len(orphan_ontology_refs)}):")
-        for rule_id, ref in orphan_ontology_refs:
+    if orphan_domain_refs:
+        print(f"ORPHAN DOMAIN REFS ({len(orphan_domain_refs)}):")
+        for rule_id, ref in orphan_domain_refs:
             print(f"  {rule_id} → {ref}")
     if stale_claims:
         print(f"STALE CLAIMS ({len(stale_claims)}):")
         for rule_id, claim_id in stale_claims:
             print(f"  {rule_id} → {claim_id}")
 
-    total = len(orphan_claims) + len(orphan_ontology_refs) + len(stale_claims)
+    total = len(orphan_claims) + len(orphan_domain_refs) + len(stale_claims)
     if total == 0:
         print("no gaps")
         return 0
@@ -328,7 +328,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
     ~30 lines of output for typical state — eyeballable, not dashboard."""
     nodes = load_all_nodes()
     rules = [(nid, data) for nid, (_, data) in nodes.items() if data.get("kind") == "rule"]
-    ontology = [(nid, data) for nid, (_, data) in nodes.items() if data.get("kind") == "ontology"]
+    domain_nodes = [(nid, data) for nid, (_, data) in nodes.items() if data.get("kind") == "domain"]
 
     # Definition_status breakdown.
     by_kind: dict[str, dict[str, int]] = {}
@@ -351,7 +351,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
     print("# Logigraph stats")
     print()
     print(f"  rules:      {len(rules)}")
-    print(f"  ontology:   {len(ontology)}")
+    print(f"  domain:     {len(domain_nodes)}")
     print(f"  claims:     {total_claims}  (stale: {stale_claims})")
     print()
     print("## Definition status")
@@ -430,7 +430,7 @@ def repo_relative(abs_path: str) -> tuple[str, str] | None:
 def find_rules_for_target(target: str) -> list[str]:
     """If target looks like a file path, return rule_ids that claim any
     depgraph node living in that file. If target looks like a node id
-    (rule:: or ontology subkind prefix), return [target] verbatim."""
+    (rule:: or domain subkind prefix), return [target] verbatim."""
     if target.startswith(("rule::", "role::", "resource::", "action::", "attribute::")):
         return [target]
     if not BY_FILE_INDEX.exists():
@@ -466,7 +466,7 @@ def cmd_context(args: argparse.Namespace) -> int:
         print(f"id: {rid}  ·  fan_out: {data.get('fan_out') or len(data.get('claims_code') or [])}")
         print(f"statement: {data.get('statement', '')}")
         print()
-        for ref in data.get("references_ontology", []):
+        for ref in data.get("references_domain", []):
             ont = nodes.get(ref, (None, {}))[1]
             summary = ont.get("summary", "")
             if summary:
@@ -484,7 +484,7 @@ def cmd_context(args: argparse.Namespace) -> int:
 # ===== rule pipeline =========================================================
 # rule-rank   list rule nodes by definition_status, ranked by claim count
 # rule-stub   create a stub rule JSON node + placeholder dossier from a candidate
-# rule-draft  emit an LLM-drafting context bundle for one rule (template + claims sources + ontology + sibling rules)
+# rule-draft  emit an LLM-drafting context bundle for one rule (template + claims sources + domain + sibling rules)
 # rule-finalize  write the dossier body for a stub/drafted rule with frontmatter
 # rule-bump   promote a rule's definition_status (default → human_reviewed)
 
@@ -572,7 +572,7 @@ def cmd_rule_stub(args: argparse.Namespace) -> int:
             "remote_hash": "",
             "stale": False,
         })
-    ontology_refs = args.ontology or ["resource::concorda::TODO"]
+    domain_refs = args.domain_ref or ["resource::concorda::TODO"]
     import hashlib as _h
     structural_hash = _h.sha256(rule_id.encode()).hexdigest()
     node = {
@@ -581,7 +581,7 @@ def cmd_rule_stub(args: argparse.Namespace) -> int:
         "kind": "rule",
         "title": title,
         "statement": statement,
-        "references_ontology": ontology_refs,
+        "references_domain": domain_refs,
         "claims_code": claims,
         "fan_out": len(claims),
         "confidence": args.confidence,
@@ -599,7 +599,7 @@ def cmd_rule_stub(args: argparse.Namespace) -> int:
 
 def cmd_rule_draft(args: argparse.Namespace) -> int:
     """Emit an LLM-drafting context bundle for a rule: template + sibling
-    rule examples + each claim_code's depgraph dossier + each ontology
+    rule examples + each claim_code's depgraph dossier + each domain
     reference's dossier. Pipe to a file and feed to a drafting agent."""
     rule_id = args.id
     node_path = _rule_node_path(rule_id)
@@ -614,7 +614,7 @@ def cmd_rule_draft(args: argparse.Namespace) -> int:
     out.append(f"- id: {rule_id}")
     out.append(f"- title: {node.get('title', '')}")
     out.append(f"- statement: {node.get('statement', '')}")
-    out.append(f"- references_ontology: {', '.join(node.get('references_ontology') or [])}")
+    out.append(f"- references_domain: {', '.join(node.get('references_domain') or [])}")
     out.append(f"- claims_code ({len(node.get('claims_code') or [])}):")
     for c in node.get("claims_code") or []:
         out.append(f"  - {c.get('role','?')} → `{c.get('depgraph_id','?')}` ({c.get('where','')})")
@@ -655,18 +655,18 @@ def cmd_rule_draft(args: argparse.Namespace) -> int:
         else:
             out.append(f"_(not in depgraph corpus — claim points at an HTTP route or an extractor blind spot)_\n")
 
-    out.append("## Ontology references\n")
-    # Index ontology nodes by id (filenames don't always match the id triple).
-    ontology_by_id: dict[str, dict] = {}
-    for of in ONTOLOGY_DIR.glob("*.json"):
+    out.append("## Domain references\n")
+    # Index domain nodes by id (filenames don't always match the id triple).
+    domain_by_id: dict[str, dict] = {}
+    for of in DOMAIN_DIR.glob("*.json"):
         try:
             d = json.loads(of.read_text())
             if d.get("id"):
-                ontology_by_id[d["id"]] = d
+                domain_by_id[d["id"]] = d
         except (OSError, json.JSONDecodeError):
             continue
-    for oid in node.get("references_ontology") or []:
-        ontd = ontology_by_id.get(oid)
+    for oid in node.get("references_domain") or []:
+        ontd = domain_by_id.get(oid)
         if ontd:
             out.append(f"### {oid}")
             out.append(f"- title: {ontd.get('title','')}")
@@ -679,7 +679,7 @@ def cmd_rule_draft(args: argparse.Namespace) -> int:
                     out.append(p.read_text().rstrip())
                     out.append("```\n")
         else:
-            out.append(f"### {oid} _(stub — ontology node not yet authored)_\n")
+            out.append(f"### {oid} _(stub — domain node not yet authored)_\n")
 
     out.append("## Authoring instructions\n")
     out.append(
@@ -858,7 +858,7 @@ def main() -> int:
     p_rs.add_argument("id", help="rule::category::short_name")
     p_rs.add_argument("--title")
     p_rs.add_argument("--statement", help="One-sentence rule statement")
-    p_rs.add_argument("--ontology", action="append", help="Ontology id (repeat for multiple)")
+    p_rs.add_argument("--domain-ref", action="append", help="Domain entity id (repeat for multiple)")
     p_rs.add_argument("--claim", action="append", help="Format: <role>:<depgraph_id>[|<where>]; repeat for multiple")
     p_rs.add_argument("--confidence", choices=["high", "medium", "low"], default="medium")
     p_rs.add_argument("--source", help="Free-text origin (commit hash, incident, decision)")

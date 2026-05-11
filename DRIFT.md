@@ -1,7 +1,7 @@
 # Logigraph DRIFT
 
 Known failure modes and how the system surfaces them. Mirror of
-depgraph's DRIFT.md, narrowed to the rule + ontology layer.
+depgraph's DRIFT.md, narrowed to the rule + domain layer.
 
 ## 1. Stale claim (depgraph node hash drifted)
 
@@ -35,17 +35,17 @@ unresolved claims. `bin/logigraph gaps` reports them.
 **Mitigation.** Update the rule's claims to point at the renamed/new
 node, or remove the claim if the enforcement was deleted.
 
-## 3. Orphan ontology reference
+## 3. Orphan domain reference
 
-**Scenario.** A rule's `references_ontology` entry points to an
-ontology node id that doesn't exist (typo, rename, deleted concept).
+**Scenario.** A rule's `references_domain` entry points to an
+domain node id that doesn't exist (typo, rename, deleted concept).
 
-**Detection.** `reconcile.py` cross-checks against `nodes/ontology/`.
+**Detection.** `reconcile.py` cross-checks against `nodes/domain/`.
 
 **Surface.** `bin/logigraph regen` exits non-zero. `bin/logigraph gaps`
 reports.
 
-**Mitigation.** Fix the typo, add the missing ontology node, or remove
+**Mitigation.** Fix the typo, add the missing domain node, or remove
 the reference.
 
 ## 4. Stub dossier merged accidentally
@@ -108,7 +108,7 @@ torn state. Re-run bin/logigraph regen before trusting context.`
 
 **Mitigation.** Re-run regen.
 
-## 8. Ontology drift (concept renamed)
+## 8. Domain drift (concept renamed)
 
 **Scenario.** "Co-owner" gets renamed to "Joint Owner" in the codebase.
 Existing rules reference `role::relational::co_owner`, which still
@@ -116,23 +116,23 @@ exists as a logigraph node, but is conceptually misaligned.
 
 **Detection.** None automatic. Same shape as #5.
 
-**Mitigation.** Treat ontology renames as structural events: rename
-the node id, update every rule's `references_ontology`, regen.
-`bin/logigraph rename-ontology <old> <new>` may eventually exist.
+**Mitigation.** Treat domain renames as structural events: rename
+the node id, update every rule's `references_domain`, regen.
+`bin/logigraph rename-domain <old> <new>` may eventually exist.
 
-## 9. Phantom ontology (referenced but never created)
+## 9. Phantom domain (referenced but never created)
 
 **Scenario.** A rule mentions `role::relational::watch_captain`, an
-ontology node that doesn't yet exist (someone wrote the rule before the
-ontology entry).
+domain node that doesn't yet exist (someone wrote the rule before the
+domain entry).
 
-**Detection.** Same as #3 — orphan ontology reference.
+**Detection.** Same as #3 — orphan domain reference.
 
 **Surface.** Validation error.
 
-**Mitigation.** Create the ontology node before writing rules that
+**Mitigation.** Create the domain node before writing rules that
 reference it. Or accept the validation error as a TODO list of
-ontology nodes to author.
+domain nodes to author.
 
 ## See also
 

@@ -11,7 +11,7 @@ file, and emits a JSON envelope with `additionalContext` containing:
       - The rule's full dossier (truncated to 200 lines).
       - The role this file plays in the rule (enforces / displays / etc.)
         and the sibling surfaces (other claims with their where: ranges).
-      - Plain-language summaries of every ontology concept the rule
+      - Plain-language summaries of every domain concept the rule
         references.
       - Stale-claim warning if the depgraph hash has drifted.
 
@@ -42,7 +42,7 @@ LOGIGRAPH = Path(os.environ.get("CONCORDA_LOGIGRAPH_PATH", Path.home() / "concor
 DEPGRAPH = Path(os.environ.get("CONCORDA_DEPGRAPH_PATH", Path.home() / "concorda" / "depgraph")).resolve()
 NODES = LOGIGRAPH / "nodes"
 RULES_DIR = NODES / "rules"
-ONTOLOGY_DIR = NODES / "ontology"
+DOMAIN_DIR = NODES / "domain"
 BY_FILE_INDEX = NODES / "_index" / "by_file.json"
 CORPUS_META = NODES / "_meta.json"
 TELEMETRY_DIR = LOGIGRAPH / "telemetry"
@@ -169,8 +169,8 @@ def find_rule_node(rule_id: str) -> dict | None:
     return None
 
 
-def find_ontology_node(node_id: str) -> dict | None:
-    for path in ONTOLOGY_DIR.rglob("*.json"):
+def find_domain_node(node_id: str) -> dict | None:
+    for path in DOMAIN_DIR.rglob("*.json"):
         if path.name.startswith("_"):
             continue
         try:
@@ -349,7 +349,7 @@ def render_for_rule(
     Section order is calibrated to defeat skimming + goal-anchoring: the most
     decisive content (surfaces, decision table, file-specific
     counter-examples, action checklist) lands first, before the LLM has built
-    momentum from reading prose. Title / statement / full dossier / ontology
+    momentum from reading prose. Title / statement / full dossier / domain
     follow as deeper reference. See plans/quirky-wishing-starfish.md Phase A.
     """
     title = rule.get("title", rule["id"])
@@ -405,16 +405,16 @@ def render_for_rule(
     parts.append(f"**Statement.** {statement}")
     parts.append("")
 
-    # 7. Ontology referenced.
-    refs = rule.get("references_ontology", [])
+    # 7. Domain referenced.
+    refs = rule.get("references_domain", [])
     if refs:
-        parts.append("### Ontology referenced")
+        parts.append("### Domain referenced")
         for ref in refs:
-            ont = find_ontology_node(ref)
+            ont = find_domain_node(ref)
             if ont:
                 parts.append(f"- `{ref}` — {ont.get('summary','')}")
             else:
-                parts.append(f"- `{ref}` — _ontology node missing (orphan reference)_")
+                parts.append(f"- `{ref}` — _domain node missing (orphan reference)_")
         parts.append("")
 
     # 8. Full dossier as deep reference.
@@ -477,7 +477,7 @@ def main() -> int:
 
     body = (
         "# 🧭 Concorda logigraph context\n\n"
-        + "_Rules and ontology that apply to the file you're about to edit. "
+        + "_Rules and domain that apply to the file you're about to edit. "
         "These describe **intent** — what the system means and why — that "
         "tests/types/lint cannot tell you._\n\n"
         + "\n\n---\n\n".join(blocks)

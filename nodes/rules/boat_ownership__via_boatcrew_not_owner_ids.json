@@ -4,11 +4,6 @@
   "kind": "rule",
   "title": "Boat ownership lives on BoatCrew, not Boat.owner_ids",
   "statement": "Boat ownership is the set of BoatCrew rows with role='owner' and status='active'; the legacy Boat.owner_ids JSON column must not be the source of truth for new code, and co-owners are equal in authority to the original owner.",
-  "references_ontology": [
-    "role::relational::boat_owner",
-    "resource::concorda::boat",
-    "resource::concorda::boat_crew"
-  ],
   "claims_code": [
     {
       "depgraph_id": "POST::/api/invite/{0}/accept",
@@ -72,5 +67,10 @@
   "source": "model dossier warnings against owner_ids; co-owner promotion via ApprovalRequest (boat_coowner_invite, _promotion, _removal, _ownership_transfer)",
   "definition_status": "human_reviewed",
   "structural_hash": "8cacc1b4fa640078298942f35084564c11996604af2b241d0b748b6add0d1d28",
-  "dossier": "dossiers/rules/boat_ownership__via_boatcrew_not_owner_ids.md"
+  "dossier": "dossiers/rules/boat_ownership__via_boatcrew_not_owner_ids.md",
+  "references_domain": [
+    "role::relational::boat_owner",
+    "resource::concorda::boat",
+    "resource::concorda::boat_crew"
+  ]
 }

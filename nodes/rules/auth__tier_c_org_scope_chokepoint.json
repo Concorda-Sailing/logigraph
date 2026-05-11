@@ -4,13 +4,6 @@
   "kind": "rule",
   "title": "Cross-org mutations must funnel through can_administer_orgs",
   "statement": "Every mutating endpoint that touches an org-owned resource (organization, regatta, event, product, discount, series, billing contact) must funnel its authorization decision through AuthUser.can_administer_orgs(owning_org_ids) after resolving the resource's owning-org set \u2014 not just check role type. Checking that the caller is an org_admin is necessary but not sufficient.",
-  "references_ontology": [
-    "role::system::org_admin",
-    "role::system::system_admin",
-    "resource::concorda::organization",
-    "resource::concorda::regatta",
-    "resource::concorda::event"
-  ],
   "claims_code": [
     {
       "depgraph_id": "PUT::/api/organizations/{0}",
@@ -82,5 +75,12 @@
   "source": "commit 058aa8c (Tier-C audit, 2026-05-05); memory project_org_admin_grandfather.md",
   "definition_status": "human_reviewed",
   "structural_hash": "6ea12651765ea6947e5650a0d84e7498f36c13e14e11f19779612022e77d372b",
-  "dossier": "dossiers/rules/auth__tier_c_org_scope_chokepoint.md"
+  "dossier": "dossiers/rules/auth__tier_c_org_scope_chokepoint.md",
+  "references_domain": [
+    "role::system::org_admin",
+    "role::system::system_admin",
+    "resource::concorda::organization",
+    "resource::concorda::regatta",
+    "resource::concorda::event"
+  ]
 }

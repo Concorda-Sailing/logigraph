@@ -148,5 +148,5 @@ performing the mutation?* If the answer is "none, I just checked
 - **NULL grandfather**: lives inside `can_administer_orgs` — treats `UserRole.organization_id IS NULL` as "all orgs."
 - **Per-resource helpers**: `routers/organizations.py::_require_org_admin_scope`, `routers/regattas.py::_require_regatta_org_scope`, `routers/regattas.py::_require_oa_scope`, `routers/products.py::_require_event_org_scope`.
 - **History anchor**: commit `058aa8c` (Tier-C audit, 2026-05-05) is the canonical fix-commit; before it, role-only checks were the norm.
-- **Adjacent ontology**: `role::system::org_admin`, `role::system::system_admin`, `resource::concorda::organization`.
+- **Adjacent domain**: `role::system::org_admin`, `role::system::system_admin`, `resource::concorda::organization`.
 - **Adjacent rule**: `rule::auth::privilege_escalation_level_guard` (sibling — role assignment scoping, different concern, same area).

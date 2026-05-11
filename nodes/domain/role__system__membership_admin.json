@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "id": "role::system::membership_admin",
+  "kind": "domain",
+  "subkind": "role",
+  "title": "Membership Admin",
+  "summary": "A Member granted authority over membership products and entitlements \u2014 creating new TemporalProducts, editing grants flags, granting memberships to specific people.",
+  "source": {
+    "kind": "system_role",
+    "level": 40,
+    "table": "Role",
+    "seeded_in": "concorda-api/migrations/",
+    "defined_in": "concorda-api/models/role.py"
+  },
+  "aliases": [
+    "membership_admin"
+  ],
+  "definition_status": "human_reviewed",
+  "structural_hash": "71f31dfe34478e4a098bfb6885e8c24902755fb33e1fcb51d336d3e66da37e2d",
+  "dossier": "dossiers/domain/role__system__membership_admin.md",
+  "extractor": null
+}

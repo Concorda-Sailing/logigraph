@@ -27,7 +27,7 @@ dossiers --status` reports the count at each stage.
 2. Write the node JSON at `nodes/rules/<id-slug>.json`. Required fields
    per `schema/rule.schema.json`:
    - `statement` — single-sentence English rule.
-   - `references_ontology` — list of ontology node ids the rule mentions.
+   - `references_domain` — list of domain node ids the rule mentions.
    - `claims_code` — list of depgraph node ids the rule lives in, each
      with `role` (enforces / checks / serializes / displays / emits) and
      `where` (file:line range).
@@ -46,7 +46,7 @@ dossiers --status` reports the count at each stage.
 4. Run `bin/logigraph regen` to validate claims and rebuild indexes.
 5. Run `bin/logigraph context <claimed-file>` to confirm injection.
 
-## Adding an ontology node
+## Adding an domain node
 
 Subkind decides the dossier shape:
 
@@ -61,12 +61,12 @@ Subkind decides the dossier shape:
 - **attribute** — `## What it represents / ## Allowed values /
   ## Default / ## Set by` template (TBD in Phase 1).
 
-For Phase 0, only the role template exists (`schema/ontology_dossier.template.md`).
+For Phase 0, only the role template exists (`schema/domain_dossier.template.md`).
 
 ## Editing a live rule or concept
 
 If the rule's *meaning* changes (not just where it's enforced):
-- Bump the rule's `structural_hash` (recompute over statement + ontology
+- Bump the rule's `structural_hash` (recompute over statement + domain
   refs + claim ids).
 - Set `definition_status: llm_drafted` so the node re-enters review.
 - Update the dossier; refresh `last_reviewed_against_hash` in
@@ -80,12 +80,12 @@ If the rule's *enforcement location* changes (refactor):
 ## Quality bar checks
 
 `bin/logigraph validate` enforces:
-- JSON-Schema compliance (`schema/ontology.schema.json`,
+- JSON-Schema compliance (`schema/domain.schema.json`,
   `schema/rule.schema.json`).
 - Required dossier sections present (rule dossiers must have
   `## The rule`, `## Why it exists`, `## Decision table`).
 - Every `claims_code[].depgraph_id` exists in the depgraph corpus.
-- Every `references_ontology` entry exists in `nodes/ontology/`.
+- Every `references_domain` entry exists in `nodes/domain/`.
 
 ## See also
 

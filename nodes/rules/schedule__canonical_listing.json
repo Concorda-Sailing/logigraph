@@ -4,9 +4,6 @@
   "kind": "rule",
   "title": "my-schedule is the canonical schedule endpoint; others are scope-narrowed views",
   "statement": "The user-facing schedule has one canonical endpoint (GET /api/events/my-schedule) that aggregates personal + bookmarked + registered + crew + co-owned events. Other listing endpoints are scope-narrowed views: profile event-registrations is registrations-only, calendar feed is the same scope as my-schedule serialized as ICS, single-event detail uses the same _build_schedule_item_for_event helper to keep its shape consistent.",
-  "references_ontology": [
-    "resource::concorda::event_crew"
-  ],
   "claims_code": [
     {
       "depgraph_id": "GET::/api/events/my-schedule",
@@ -46,5 +43,8 @@
   "source": "schedule review 2026-05-10 MEDIUM #5; commit 1b5d864 'detail page calls /api/events/{id}/detail, drops mySchedule coupling'",
   "definition_status": "human_reviewed",
   "structural_hash": "a56f93e5065ea58ca436fd1c8a7ff1e14f3099f00db6b7f6b11003ba6b1649de",
-  "dossier": "dossiers/rules/schedule__canonical_listing.md"
+  "dossier": "dossiers/rules/schedule__canonical_listing.md",
+  "references_domain": [
+    "resource::concorda::event_crew"
+  ]
 }

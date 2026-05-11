@@ -1,7 +1,7 @@
 # Logigraph
 
 A continuously-maintained graph of **business rules** and the
-**role/resource/action ontology** they reference, with each rule
+**role/resource/action domain** they reference, with each rule
 *claiming* the depgraph code nodes that enforce it.
 
 Sibling to [depgraph](../depgraph/), which tracks structure (what calls
@@ -32,9 +32,9 @@ time via the PreToolUse hook.
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │ Logigraph (rules)                                                  │
-│  rule statements → reference ontology + claim depgraph code        │
+│  rule statements → reference domain + claim depgraph code        │
 ├────────────────────────────────────────────────────────────────────┤
-│ Ontology (roles, resources, actions, attributes)                   │
+│ Domain (roles, resources, actions, attributes)                   │
 │  small, slow-changing nouns/verbs                                  │
 │  partially extracted (system roles, DB resources)                  │
 │  partially authored (relational roles, abstract concepts)          │
@@ -53,29 +53,29 @@ logigraph/
 ├── DRIFT.md             known failure modes
 ├── bin/logigraph        Python CLI: validate, regen, context
 ├── nodes/
-│   ├── ontology/        role/resource/action/attribute node JSON
+│   ├── domain/        role/resource/action/attribute node JSON
 │   ├── rules/           rule node JSON
 │   ├── _index/
 │   │   ├── by_code.json        depgraph_id → [rule_ids]
 │   │   ├── by_file.json        (repo, path) → [rule_ids]
-│   │   └── by_ontology.json    ontology_id → [rule_ids]
+│   │   └── by_domain.json    domain_id → [rule_ids]
 │   ├── _manifests/      per-source extractor manifests
 │   ├── _meta.json       regen_status + corpus provenance
 │   └── _archive/        tombstoned nodes
 ├── dossiers/
-│   ├── ontology/        plain-language definitions of concepts
+│   ├── domain/        plain-language definitions of concepts
 │   └── rules/           plain-language statements of rules
 ├── extractors/
 │   ├── extract_system_roles.py     reads concorda-api/scripts/seed_roles.py
 │   ├── extract_db_resources.py     walks SQLAlchemy models
 │   └── reconcile.py                builds indexes, validates claims
 ├── schema/
-│   ├── ontology.schema.json
+│   ├── domain.schema.json
 │   ├── rule.schema.json
-│   ├── ontology_dossier.template.md
+│   ├── domain_dossier.template.md
 │   └── rule_dossier.template.md
 └── hooks/
-    ├── pre_edit_inject.py      PreToolUse: inject rules + ontology
+    ├── pre_edit_inject.py      PreToolUse: inject rules + domain
     └── post_edit_regen.py      Stop: refresh indexes on touched files
 ```
 
@@ -91,7 +91,7 @@ Phase 0 (tracer bullet) — building.
 
 ## See also
 
-- `PROCESS.md` — how to add a rule, how to add an ontology node, when
+- `PROCESS.md` — how to add a rule, how to add an domain node, when
   dossiers need re-review.
 - `DRIFT.md` — known failure modes and how the system surfaces them.
 - `../depgraph/` — the structural graph this layers on top of.

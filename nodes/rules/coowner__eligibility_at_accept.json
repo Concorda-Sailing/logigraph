@@ -4,9 +4,6 @@
   "kind": "rule",
   "title": "Boat Owner membership is enforced at accept-time, not send-time",
   "statement": "Boat Owner membership (boat_management product grant) is required at the moment the invitee accepts a co-owner invite, not when the invite is sent. The check fires in the cast_vote service when the invitee voter approves; the boats.py invite endpoint accepts the invite without checking the recipient is eligible, surfacing only that they will need to upgrade to accept.",
-  "references_ontology": [
-    "role::relational::boat_owner"
-  ],
   "claims_code": [
     {
       "depgraph_id": "concorda-api::services/approvals.py::cast_vote",
@@ -30,5 +27,8 @@
   "source": "commit 4c7de14 'feat(coowner): enforce Boat Owner membership at invite-accept, not invite-send'",
   "definition_status": "human_reviewed",
   "structural_hash": "9aaed1960315afdaedb8172872c2069d6f36d6e5c43d61261deaf36c25e46e08",
-  "dossier": "dossiers/rules/coowner__eligibility_at_accept.md"
+  "dossier": "dossiers/rules/coowner__eligibility_at_accept.md",
+  "references_domain": [
+    "role::relational::boat_owner"
+  ]
 }

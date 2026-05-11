@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "id": "attribute::sailing_event::accept_crew_requests",
+  "kind": "domain",
+  "subkind": "attribute",
+  "title": "accept_crew_requests",
+  "summary": "Per-SailingEvent boolean toggle. True = the boat is accepting unsolicited crew-requests for this race. Drives the 'Accepting Crew' badge on the regatta calendar.",
+  "source": {
+    "kind": "conceptual",
+    "predicate": "SailingEvent.accept_crew_requests == True",
+    "defined_in": "concorda-api/models/sailing_event.py"
+  },
+  "aliases": [
+    "accept_crew_requests",
+    "accepting_crew_for_this_race"
+  ],
+  "definition_status": "human_reviewed",
+  "structural_hash": "0de827b227a7d4fdbb30f07f3d7f1fa4361c6983f121478d7d235c069c21e223",
+  "dossier": "dossiers/domain/attribute__sailing_event__accept_crew_requests.md",
+  "extractor": null
+}

@@ -153,5 +153,5 @@ on the tx, but only one is the legitimate guest-checkout path.
   — match by email, set `person_id`.
 - **History commits**: `74962cb` (the original security fix),
   `3750138` (guest-checkout NULL-NULL path).
-- **Adjacent ontology**: `resource::concorda::transaction`,
+- **Adjacent domain**: `resource::concorda::transaction`,
   `resource::concorda::person`, `role::system::member`.

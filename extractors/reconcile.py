@@ -5,28 +5,28 @@ extractor runs.
 
 Responsibilities, in order:
 
-  1. Load every logigraph node JSON in nodes/{ontology,rules}/**/*.json.
+  1. Load every logigraph node JSON in nodes/{domain,rules}/**/*.json.
   2. Load the depgraph corpus once, keyed by id, so claims can be
      validated and remote_hash can be refreshed.
   3. For each rule, refresh `claims_code[].remote_hash` from the current
      depgraph node and set `stale: true` when divergent. Validate that
      every claim's `depgraph_id` exists in the depgraph corpus —
      missing ids fail loud.
-  4. Validate every rule's `references_ontology` against the local
-     ontology corpus. Missing ids fail loud.
+  4. Validate every rule's `references_domain` against the local
+     domain corpus. Missing ids fail loud.
   5. Compute `fan_out` on each rule (count of claims_code).
   6. Write three reverse-edge indexes atomically:
        _index/by_code.json       depgraph_id → [rule_ids]
        _index/by_file.json       repo/path   → [rule_ids]
-       _index/by_ontology.json   ontology_id → [rule_ids]
+       _index/by_domain.json   domain_id → [rule_ids]
   7. Write _meta.json with regen_status: complete (clearing the
      in_progress marker that bin/logigraph set at regen start).
 
 Pure functions where practical. Atomic writes (tmp+rename). Bit-stable:
 two consecutive regens with no source changes produce zero file diffs.
 
-Phase 0 scope: rules and ontology are *authored*, not extracted.
-Manifests for ontology extractors will come in Phase 1
+Phase 0 scope: rules and domain are *authored*, not extracted.
+Manifests for domain extractors will come in Phase 1
 (extract_system_roles.py, extract_db_resources.py).
 """
 
@@ -45,7 +45,7 @@ NODES = LOGIGRAPH / "nodes"
 INDEX_DIR = NODES / "_index"
 BY_CODE_INDEX = INDEX_DIR / "by_code.json"
 BY_FILE_INDEX = INDEX_DIR / "by_file.json"
-BY_ONTOLOGY_INDEX = INDEX_DIR / "by_ontology.json"
+BY_DOMAIN_INDEX = INDEX_DIR / "by_domain.json"
 CORPUS_META = NODES / "_meta.json"
 INDEX_SCHEMA_VERSION = 1
 META_SCHEMA_VERSION = 1
@@ -106,16 +106,16 @@ def refresh_claims_and_validate(
       - Refresh remote_hash from current depgraph and toggle stale flag.
       - Compute fan_out from claims_code.
       - Collect orphan claims (claim_id not in depgraph corpus).
-      - Collect orphan ontology refs (referenced ontology id not authored).
+      - Collect orphan domain refs (referenced domain id not authored).
       - Collect stale claims (remote_hash diverged from current).
 
     Mutates the loaded node dicts in place. Returns the three orphan lists
     for reporting.
     """
-    ontology_ids = {nid for nid, (_, d) in nodes.items() if d.get("kind") == "ontology"}
+    domain_ids = {nid for nid, (_, d) in nodes.items() if d.get("kind") == "domain"}
 
     orphan_claims: list[tuple[str, str]] = []
-    orphan_ontology: list[tuple[str, str]] = []
+    orphan_domain: list[tuple[str, str]] = []
     stale_claims: list[tuple[str, str]] = []
 
     for rid, (_, data) in nodes.items():
@@ -142,11 +142,11 @@ def refresh_claims_and_validate(
                 claim["remote_hash"] = current_hash
         data["fan_out"] = len(data.get("claims_code", []))
 
-        for ref in data.get("references_ontology", []):
-            if ref not in ontology_ids:
-                orphan_ontology.append((rid, ref))
+        for ref in data.get("references_domain", []):
+            if ref not in domain_ids:
+                orphan_domain.append((rid, ref))
 
-    return orphan_claims, stale_claims, orphan_ontology
+    return orphan_claims, stale_claims, orphan_domain
 
 
 def write_node_if_changed(path: Path, data: dict) -> bool:
@@ -183,7 +183,7 @@ def build_indexes(
     to serialize."""
     by_code: dict[str, list[str]] = {}
     by_file: dict[str, list[str]] = {}
-    by_ontology: dict[str, list[str]] = {}
+    by_domain: dict[str, list[str]] = {}
 
     for rid, (_, data) in nodes.items():
         if data.get("kind") != "rule":
@@ -202,11 +202,11 @@ def build_indexes(
                     key = f"{repo}/{rel}"
                     if rid not in by_file.setdefault(key, []):
                         by_file[key].append(rid)
-        for ref in data.get("references_ontology", []):
-            by_ontology.setdefault(ref, []).append(rid)
+        for ref in data.get("references_domain", []):
+            by_domain.setdefault(ref, []).append(rid)
 
     # Sort lists deterministically so indexes are bit-stable.
-    for d in (by_code, by_file, by_ontology):
+    for d in (by_code, by_file, by_domain):
         for k in d:
             d[k] = sorted(set(d[k]))
 
@@ -214,7 +214,7 @@ def build_indexes(
     return (
         {k: by_code[k] for k in sorted(by_code)},
         {k: by_file[k] for k in sorted(by_file)},
-        {k: by_ontology[k] for k in sorted(by_ontology)},
+        {k: by_domain[k] for k in sorted(by_domain)},
     )
 
 
@@ -253,9 +253,9 @@ def _write_index(path: Path, payload: dict, stable_excludes: tuple[str, ...] = (
     return True
 
 
-def write_indexes(by_code: dict, by_file: dict, by_ontology: dict, rule_count: int) -> tuple[bool, bool, bool]:
+def write_indexes(by_code: dict, by_file: dict, by_domain: dict, rule_count: int) -> tuple[bool, bool, bool]:
     """Write the three reverse-edge index files. Returns (changed_code,
-    changed_file, changed_ontology)."""
+    changed_file, changed_domain)."""
     now = datetime.now(timezone.utc).isoformat()
     git = _git_head_concorda()
 
@@ -275,21 +275,21 @@ def write_indexes(by_code: dict, by_file: dict, by_ontology: dict, rule_count: i
         "file_count": len(by_file),
         "by_file": by_file,
     }
-    ontology_payload = {
+    domain_payload = {
         "schema_version": INDEX_SCHEMA_VERSION,
         "generated_at": now,
         "git_commit": git,
         "rule_count": rule_count,
-        "ontology_count": len(by_ontology),
-        "by_ontology": by_ontology,
+        "domain_count": len(by_domain),
+        "by_domain": by_domain,
     }
     c1 = _write_index(BY_CODE_INDEX, code_payload)
     c2 = _write_index(BY_FILE_INDEX, file_payload)
-    c3 = _write_index(BY_ONTOLOGY_INDEX, ontology_payload)
+    c3 = _write_index(BY_DOMAIN_INDEX, domain_payload)
     return c1, c2, c3
 
 
-def write_corpus_meta(node_count: int, rule_count: int, ontology_count: int) -> bool:
+def write_corpus_meta(node_count: int, rule_count: int, domain_count: int) -> bool:
     """Flip regen_status to complete. Bit-stable on no-op regens."""
     payload = {
         "schema_version": META_SCHEMA_VERSION,
@@ -298,7 +298,7 @@ def write_corpus_meta(node_count: int, rule_count: int, ontology_count: int) -> 
         "git_commit": _git_head_concorda(),
         "node_count": node_count,
         "rule_count": rule_count,
-        "ontology_count": ontology_count,
+        "domain_count": domain_count,
     }
     return _write_index(CORPUS_META, payload, stable_excludes=("generated_at", "started_at"))
 
@@ -313,48 +313,48 @@ def main() -> int:
     nodes = load_all_nodes()
     depgraph_corpus = load_depgraph_corpus()
 
-    orphan_claims, stale_claims, orphan_ontology = refresh_claims_and_validate(
+    orphan_claims, stale_claims, orphan_domain = refresh_claims_and_validate(
         nodes, depgraph_corpus
     )
 
     rule_count = sum(1 for _, (_, d) in nodes.items() if d.get("kind") == "rule")
-    ontology_count = sum(1 for _, (_, d) in nodes.items() if d.get("kind") == "ontology")
+    domain_count = sum(1 for _, (_, d) in nodes.items() if d.get("kind") == "domain")
 
     if not args.report_only:
         node_writes = persist_node_updates(nodes)
     else:
         node_writes = 0
 
-    by_code, by_file, by_ontology = build_indexes(nodes, depgraph_corpus)
+    by_code, by_file, by_domain = build_indexes(nodes, depgraph_corpus)
 
     if not args.report_only:
-        c_code, c_file, c_ont = write_indexes(by_code, by_file, by_ontology, rule_count)
-        meta_changed = write_corpus_meta(len(nodes), rule_count, ontology_count)
+        c_code, c_file, c_ont = write_indexes(by_code, by_file, by_domain, rule_count)
+        meta_changed = write_corpus_meta(len(nodes), rule_count, domain_count)
     else:
         c_code = c_file = c_ont = meta_changed = False
 
-    print(f"loaded:           {len(nodes)} logigraph nodes ({rule_count} rules, {ontology_count} ontology)")
+    print(f"loaded:           {len(nodes)} logigraph nodes ({rule_count} rules, {domain_count} domain)")
     print(f"depgraph corpus:  {len(depgraph_corpus)} nodes")
     print(f"node updates:     {node_writes} (claim hash / fan_out refresh)")
-    print(f"index changes:    by_code={'updated' if c_code else 'unchanged'}, by_file={'updated' if c_file else 'unchanged'}, by_ontology={'updated' if c_ont else 'unchanged'}")
+    print(f"index changes:    by_code={'updated' if c_code else 'unchanged'}, by_file={'updated' if c_file else 'unchanged'}, by_domain={'updated' if c_ont else 'unchanged'}")
     print(f"meta:             {'updated' if meta_changed else 'unchanged'}")
     print(f"orphan claims:    {len(orphan_claims)}")
     for rid, cid in orphan_claims[:10]:
         print(f"  {rid} → {cid}")
     if len(orphan_claims) > 10:
         print(f"  ... and {len(orphan_claims) - 10} more")
-    print(f"orphan ontology:  {len(orphan_ontology)}")
-    for rid, ref in orphan_ontology[:10]:
+    print(f"orphan domain:  {len(orphan_domain)}")
+    for rid, ref in orphan_domain[:10]:
         print(f"  {rid} → {ref}")
-    if len(orphan_ontology) > 10:
-        print(f"  ... and {len(orphan_ontology) - 10} more")
+    if len(orphan_domain) > 10:
+        print(f"  ... and {len(orphan_domain) - 10} more")
     print(f"stale claims:     {len(stale_claims)}")
     for rid, cid in stale_claims[:10]:
         print(f"  {rid} → {cid}")
     if len(stale_claims) > 10:
         print(f"  ... and {len(stale_claims) - 10} more")
 
-    if args.strict and (orphan_claims or orphan_ontology):
+    if args.strict and (orphan_claims or orphan_domain):
         return 1
     return 0
 

@@ -4,10 +4,6 @@
   "kind": "rule",
   "title": "Personal events are excluded from public listings",
   "statement": "Public event-listing endpoints must filter Event.category != 'personal'; personal events must always carry slug = None (never '') to dodge SQLite UNIQUE-collision; personal events are visible only to their owner_id via the dedicated /events/personal endpoint.",
-  "references_ontology": [
-    "resource::concorda::event",
-    "role::system::member"
-  ],
   "claims_code": [
     {
       "depgraph_id": "GET::/api/events",
@@ -55,5 +51,9 @@
   "source": "commit 4fd165d (slug-UNIQUE fix); commits 7570175 \u2192 revert 57f2e00 \u2192 re-fix b887b73 (category-filter regression history)",
   "definition_status": "human_reviewed",
   "structural_hash": "dfb7778a1e86eb525f36967dfd78fb566e17ed9efa685a2493946604dd3f3d98",
-  "dossier": "dossiers/rules/events__personal_event_excluded_from_public_listings.md"
+  "dossier": "dossiers/rules/events__personal_event_excluded_from_public_listings.md",
+  "references_domain": [
+    "resource::concorda::event",
+    "role::system::member"
+  ]
 }

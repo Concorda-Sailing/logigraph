@@ -143,7 +143,7 @@ BoatCrew, never by reading `owner_ids`.
   `boat_ownership_transfer`.
 - **Models**: `concorda-api/models/boat_crew.py::BoatCrew`,
   `concorda-api/models/boat.py::Boat`.
-- **Adjacent ontology**: `role::relational::boat_owner`,
+- **Adjacent domain**: `role::relational::boat_owner`,
   `resource::concorda::boat`, `resource::concorda::boat_crew`,
   `resource::concorda::approval_request`.
 - **Adjacent rule**: `rule::coowner::eligibility_at_accept` (entitlement
