@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "id": "rule::events::personal_event_excluded_from_public_listings",
+  "kind": "rule",
+  "title": "Personal events are excluded from public listings",
+  "statement": "Public event-listing endpoints must filter Event.category != 'personal'; personal events must always carry slug = None (never '') to dodge SQLite UNIQUE-collision; personal events are visible only to their owner_id via the dedicated /events/personal endpoint.",
+  "references_ontology": [
+    "resource::concorda::event",
+    "role::system::member"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "GET::/api/events",
+      "role": "enforces",
+      "where": "events.py \u2014 main public listing filters category != 'personal'",
+      "confidence": "medium",
+      "remote_hash": "60bcc82d3a4a650b1c92c0499b9090272642fe693158c8736a33d01c3fa03e06",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/events/upcoming",
+      "role": "enforces",
+      "where": "events.py \u2014 upcoming listing same filter",
+      "confidence": "medium",
+      "remote_hash": "7776dba0507151d1869ef3820119d68e5da971899cf858f24e4b0b75eea7033d",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/events/my-schedule",
+      "role": "enforces",
+      "where": "events.py \u2014 my-schedule includes personal events of the caller but excludes other users' personal events",
+      "confidence": "medium",
+      "remote_hash": "5dd568f5a0581aebdba2ec22d716efe3cb228b665ba6c53e403348dc1f749ca0",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/events/personal",
+      "role": "enforces",
+      "where": "events.py \u2014 viewer-scoped to current_user.id; the ONLY surface that returns personal events to non-owners (and it doesn't \u2014 they're owner-scoped)",
+      "confidence": "medium",
+      "remote_hash": "94a3dc6b1b0c42c97a1c5ccef1950b006ade1ce97026e54dc1a6bb52ae83c678",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/events/{0}",
+      "role": "checks",
+      "where": "events.py \u2014 single-event read denies if category=='personal' and caller is not owner",
+      "confidence": "medium",
+      "remote_hash": "ae139b2c618a16cc66ab28b34c9f52cbf744ceb2a024fa1b253b8a37b8268836",
+      "stale": false
+    }
+  ],
+  "fan_out": 5,
+  "confidence": "high",
+  "source": "commit 4fd165d (slug-UNIQUE fix); commits 7570175 \u2192 revert 57f2e00 \u2192 re-fix b887b73 (category-filter regression history)",
+  "definition_status": "human_reviewed",
+  "structural_hash": "dfb7778a1e86eb525f36967dfd78fb566e17ed9efa685a2493946604dd3f3d98",
+  "dossier": "dossiers/rules/events__personal_event_excluded_from_public_listings.md"
+}

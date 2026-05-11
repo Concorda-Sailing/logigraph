@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "id": "rule::datetime::utc_aware_storage_and_org_tz_display",
+  "kind": "rule",
+  "title": "Datetimes are UTC-aware at rest, org-tz at the surface",
+  "statement": "All datetime columns use the UtcDateTime SQLAlchemy type (naive-as-UTC stored, aware on read); UI rendering goes through formatInOrgTz / ymdInOrgTz; <input type='datetime-local'> save paths funnel through orgInputToUtcIso. No raw Date.getHours, toLocaleString without timeZone, or new Date().toISOString().slice() shortcuts in production code paths.",
+  "references_ontology": [
+    "resource::concorda::event",
+    "resource::concorda::organization"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "concorda-web::src/lib/datetime.ts::formatInOrgTz",
+      "role": "enforces",
+      "where": "datetime.ts \u2014 canonical org-tz formatter; 70+ dependents",
+      "confidence": "medium",
+      "remote_hash": "3234e09d0f904fa84725d3f27f9e0eb5d912a46c819c880989672c53bf15c724",
+      "stale": false
+    },
+    {
+      "depgraph_id": "concorda-web::src/lib/datetime.ts::ymdInOrgTz",
+      "role": "enforces",
+      "where": "datetime.ts \u2014 canonical org-tz date formatter; 35+ dependents",
+      "confidence": "medium",
+      "remote_hash": "3dd51d1a9e8360c041c22eedcd066068ab1b69400b9d909b936cd4e717d69e71",
+      "stale": false
+    },
+    {
+      "depgraph_id": "concorda-web::src/lib/datetime.ts::orgInputToUtcIso",
+      "role": "enforces",
+      "where": "datetime.ts \u2014 canonical input-side converter; 13 form-save sites",
+      "confidence": "medium",
+      "remote_hash": "a2129e46c16419b802c9c764b3350c195a394e343105e639e39f491d170f72c8",
+      "stale": false
+    },
+    {
+      "depgraph_id": "concorda-web::src/lib/datetime.ts::utcIsoToOrgInput",
+      "role": "enforces",
+      "where": "datetime.ts \u2014 canonical input-side reverse converter",
+      "confidence": "medium",
+      "remote_hash": "59caad98502ea0ca69d7948a66a98d563d12b089c3e23a6e4f74e5e9a913826d",
+      "stale": false
+    },
+    {
+      "depgraph_id": "concorda-api::models/event.py::Event",
+      "role": "checks",
+      "where": "event.py \u2014 UtcDateTime columns; reference model for the storage convention",
+      "confidence": "medium",
+      "remote_hash": "ff987f0c2fc9f71f1793195f1bb75e75cbf1a0f89ecf834fd787e8df90524825",
+      "stale": false
+    }
+  ],
+  "fan_out": 5,
+  "confidence": "high",
+  "source": "memory feedback_naive_datetime_convention; memory feedback_timezone_helpers_mandatory; 2026-05-07 audit found ~30 components drifting; pre-2026-05-06 imports have ~5h drift",
+  "definition_status": "human_reviewed",
+  "structural_hash": "692694c3794270f9ed59522eb5770fe9fdd424a8343d759fdcafaecd7bdcd120",
+  "dossier": "dossiers/rules/datetime__utc_aware_storage_and_org_tz_display.md"
+}

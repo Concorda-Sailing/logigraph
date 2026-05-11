@@ -1,14 +1,18 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-10T11:04:11.887732+00:00",
+  "generated_at": "2026-05-11T10:32:53.192184+00:00",
   "git_commit": "dd72f2f60a11",
-  "rule_count": 4,
-  "file_count": 9,
+  "rule_count": 9,
+  "file_count": 16,
   "by_file": {
+    "concorda-api/models/event.py": [
+      "rule::datetime::utc_aware_storage_and_org_tz_display"
+    ],
     "concorda-api/models/event_crew.py": [
       "rule::event_crew::status_enum"
     ],
     "concorda-api/routers/boats.py": [
+      "rule::boat_ownership::via_boatcrew_not_owner_ids",
       "rule::coowner::eligibility_at_accept",
       "rule::crew_visibility::peer_pii_resume_gated"
     ],
@@ -18,10 +22,28 @@
     "concorda-api/routers/events.py": [
       "rule::crew_visibility::peer_pii_resume_gated",
       "rule::event_crew::status_enum",
+      "rule::events::personal_event_excluded_from_public_listings",
+      "rule::payments::transaction_person_binding",
       "rule::schedule::canonical_listing"
     ],
+    "concorda-api/routers/invite.py": [
+      "rule::boat_ownership::via_boatcrew_not_owner_ids"
+    ],
+    "concorda-api/routers/organizations.py": [
+      "rule::auth::tier_c_org_scope_chokepoint"
+    ],
+    "concorda-api/routers/payments.py": [
+      "rule::payments::transaction_person_binding"
+    ],
+    "concorda-api/routers/products.py": [
+      "rule::auth::tier_c_org_scope_chokepoint"
+    ],
     "concorda-api/routers/profile.py": [
+      "rule::boat_ownership::via_boatcrew_not_owner_ids",
       "rule::schedule::canonical_listing"
+    ],
+    "concorda-api/routers/regattas.py": [
+      "rule::auth::tier_c_org_scope_chokepoint"
     ],
     "concorda-api/schemas/event_crew.py": [
       "rule::event_crew::status_enum"
@@ -34,6 +56,9 @@
     ],
     "concorda-web/src/app/members/schedule/[id]/page.tsx": [
       "rule::crew_visibility::peer_pii_resume_gated"
+    ],
+    "concorda-web/src/lib/datetime.ts": [
+      "rule::datetime::utc_aware_storage_and_org_tz_display"
     ]
   }
 }

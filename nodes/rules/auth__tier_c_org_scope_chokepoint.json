@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "id": "rule::auth::tier_c_org_scope_chokepoint",
+  "kind": "rule",
+  "title": "Cross-org mutations must funnel through can_administer_orgs",
+  "statement": "Every mutating endpoint that touches an org-owned resource (organization, regatta, event, product, discount, series, billing contact) must funnel its authorization decision through AuthUser.can_administer_orgs(owning_org_ids) after resolving the resource's owning-org set \u2014 not just check role type. Checking that the caller is an org_admin is necessary but not sufficient.",
+  "references_ontology": [
+    "role::system::org_admin",
+    "role::system::system_admin",
+    "resource::concorda::organization",
+    "resource::concorda::regatta",
+    "resource::concorda::event"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "PUT::/api/organizations/{0}",
+      "role": "enforces",
+      "where": "organizations.py \u2014 _require_org_admin_scope on the path id; the chokepoint",
+      "confidence": "medium",
+      "remote_hash": "5edf0f33a0873f1550503afddb74d0fd7851612789492ce3f4b27cc5e68f3971",
+      "stale": false
+    },
+    {
+      "depgraph_id": "DELETE::/api/organizations/{0}",
+      "role": "enforces",
+      "where": "organizations.py",
+      "confidence": "medium",
+      "remote_hash": "252d565eceff20a4dc377f6b2a025e00b4c75e13b942b463e433a24598061c34",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/organizations/{0}/contacts",
+      "role": "enforces",
+      "where": "organizations.py \u2014 contact CRUD must scope-check the parent org",
+      "confidence": "medium",
+      "remote_hash": "4d679892d1ba95a066408a0680bc7932b41f3efdf744b84969590c5fdc69aba6",
+      "stale": false
+    },
+    {
+      "depgraph_id": "PUT::/api/regattas/{0}",
+      "role": "enforces",
+      "where": "regattas.py \u2014 _require_regatta_org_scope resolves owning org via Regatta.organization_id",
+      "confidence": "medium",
+      "remote_hash": "4b3cd39eacaa0211ed3079343031c612302ae1a02da04154fd5672daef8a5a84",
+      "stale": false
+    },
+    {
+      "depgraph_id": "DELETE::/api/regattas/{0}",
+      "role": "enforces",
+      "where": "regattas.py",
+      "confidence": "medium",
+      "remote_hash": "f696796282bfd31a46bd8ca6c092926558ae73bada13ff19c0935fe0156ef68b",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/regattas",
+      "role": "enforces",
+      "where": "regattas.py \u2014 _require_oa_scope on the organizing_authority list at create time",
+      "confidence": "medium",
+      "remote_hash": "a686917568719d6169866164777b54c5ef1d43dc021e7d575d985044a4b01a32",
+      "stale": false
+    },
+    {
+      "depgraph_id": "PUT::/api/products/{0}",
+      "role": "enforces",
+      "where": "products.py \u2014 _require_event_org_scope resolves Product \u2192 Event \u2192 organization_id",
+      "confidence": "medium",
+      "remote_hash": "b89a655606a2e7d72dc11743ee23c18d3e8913bf24fe1918d57c7ebc934754c1",
+      "stale": false
+    },
+    {
+      "depgraph_id": "DELETE::/api/products/{0}",
+      "role": "enforces",
+      "where": "products.py",
+      "confidence": "medium",
+      "remote_hash": "f2857bf92f8b0d4521870004ebf360dcf8bb5fbabf7f98f81412fdd5303d8c7f",
+      "stale": false
+    }
+  ],
+  "fan_out": 8,
+  "confidence": "high",
+  "source": "commit 058aa8c (Tier-C audit, 2026-05-05); memory project_org_admin_grandfather.md",
+  "definition_status": "human_reviewed",
+  "structural_hash": "6ea12651765ea6947e5650a0d84e7498f36c13e14e11f19779612022e77d372b",
+  "dossier": "dossiers/rules/auth__tier_c_org_scope_chokepoint.md"
+}

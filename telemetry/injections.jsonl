@@ -25,3 +25,12 @@
 {"ts": "2026-05-11T01:51:01.740565+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::schedule::canonical_listing"}
 {"ts": "2026-05-11T02:01:42.919462+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/calendar.py", "rule_id": "rule::schedule::canonical_listing"}
 {"ts": "2026-05-11T02:18:55.547202+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-web/src/app/members/schedule/[id]/page.tsx", "rule_id": "rule::crew_visibility::peer_pii_resume_gated"}
+{"ts": "2026-05-11T10:33:00.279832+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/organizations.py", "rule_id": "rule::auth::tier_c_org_scope_chokepoint"}
+{"ts": "2026-05-11T10:33:07.302458+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::crew_visibility::peer_pii_resume_gated"}
+{"ts": "2026-05-11T10:33:07.302458+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::event_crew::status_enum"}
+{"ts": "2026-05-11T10:33:07.302458+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::events::personal_event_excluded_from_public_listings"}
+{"ts": "2026-05-11T10:33:07.302458+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::payments::transaction_person_binding"}
+{"ts": "2026-05-11T10:33:07.302458+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/events.py", "rule_id": "rule::schedule::canonical_listing"}
+{"ts": "2026-05-11T10:33:07.373291+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-web/src/lib/datetime.ts", "rule_id": "rule::datetime::utc_aware_storage_and_org_tz_display"}
+{"ts": "2026-05-11T10:33:07.432457+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/payments.py", "rule_id": "rule::payments::transaction_person_binding"}
+{"ts": "2026-05-11T10:33:07.534052+00:00", "kind": "injection", "tool": "Edit", "file_path": "/home/lgreenlee/concorda-api/routers/invite.py", "rule_id": "rule::boat_ownership::via_boatcrew_not_owner_ids"}

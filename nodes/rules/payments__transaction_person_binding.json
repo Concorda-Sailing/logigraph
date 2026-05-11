@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "id": "rule::payments::transaction_person_binding",
+  "kind": "rule",
+  "title": "Redeeming a paid transaction requires matching person binding",
+  "statement": "Redeeming a paid transaction_id must require Transaction.person_id == current_user.id OR both NULL (guest-checkout). The NULL-NULL branch must not be tightened without preserving the guest-checkout path; the non-NULL/non-match branch must always reject.",
+  "references_ontology": [
+    "resource::concorda::transaction",
+    "resource::concorda::person",
+    "role::system::member"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "POST::/api/events/slug/{0}/register",
+      "role": "enforces",
+      "where": "events.py:1694-1727 \u2014 register_for_event binds Transaction.person_id at redemption time and rejects mismatch",
+      "confidence": "medium",
+      "remote_hash": "a986f9affd8a633625a1f500a615ac970cbde5773ce8bfc92625caa677948689",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/payments/create-intent",
+      "role": "enforces",
+      "where": "payments.py \u2014 sets person_id=current_user_id if authenticated, NULL for guest",
+      "confidence": "medium",
+      "remote_hash": "7799129de4846deb4a174e933206c4f88503941b5c88f5fc39124c4c6b354151",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/payments/webhook",
+      "role": "enforces",
+      "where": "payments.py:474-503 \u2014 webhook lifecycle promotes guest tx to keyed when the user signs up post-purchase",
+      "confidence": "medium",
+      "remote_hash": "2fa90658d01596ca80e1f50a1884729f55d60797da2ac756c57bfedfeda20ccb",
+      "stale": false
+    }
+  ],
+  "fan_out": 3,
+  "confidence": "high",
+  "source": "commit 74962cb (pre-fix: any user could redeem another's tx); commit 3750138 (guest-checkout NULL-NULL path)",
+  "definition_status": "human_reviewed",
+  "structural_hash": "59154d4c9e677cc47da40834376c720000d2eb30d3cb6ea27f9ff380ce1772d0",
+  "dossier": "dossiers/rules/payments__transaction_person_binding.md"
+}

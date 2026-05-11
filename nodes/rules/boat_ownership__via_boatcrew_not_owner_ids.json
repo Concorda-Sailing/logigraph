@@ -1,0 +1,76 @@
+{
+  "schema_version": 2,
+  "id": "rule::boat_ownership::via_boatcrew_not_owner_ids",
+  "kind": "rule",
+  "title": "Boat ownership lives on BoatCrew, not Boat.owner_ids",
+  "statement": "Boat ownership is the set of BoatCrew rows with role='owner' and status='active'; the legacy Boat.owner_ids JSON column must not be the source of truth for new code, and co-owners are equal in authority to the original owner.",
+  "references_ontology": [
+    "role::relational::boat_owner",
+    "resource::concorda::boat",
+    "resource::concorda::boat_crew"
+  ],
+  "claims_code": [
+    {
+      "depgraph_id": "POST::/api/invite/{0}/accept",
+      "role": "enforces",
+      "where": "invite.py \u2014 coowner accept flips a BoatCrew row to role='owner', status='active'; this is the canonical mutation point",
+      "confidence": "medium",
+      "remote_hash": "8e22ea289b2522bfcd21c1a447056b79b5068d31485b4b4f86778ed226b0ff10",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/boats/{0}/coowner-invite",
+      "role": "checks",
+      "where": "boats.py \u2014 caller must already be a BoatCrew owner of the boat",
+      "confidence": "medium",
+      "remote_hash": "54a9d78746c2a81c8afb6d031424cb0e2267a40f188f78e4db11a9cd3c87f2af",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/boats/{0}/coowner-remove",
+      "role": "checks",
+      "where": "boats.py \u2014 proposer + target are both owners; uses BoatCrew membership, not owner_ids",
+      "confidence": "medium",
+      "remote_hash": "49aff4a0f89d700bb231562301319ec473027e63d16b7a72364f028d5a7e3f1d",
+      "stale": false
+    },
+    {
+      "depgraph_id": "POST::/api/profile/boats/{0}/transfer",
+      "role": "checks",
+      "where": "profile.py \u2014 transfer source is identified via BoatCrew owner rows",
+      "confidence": "medium",
+      "remote_hash": "d236fb30156d61618d1c1f5b098ed8d5c61ab93ecb23bc08871f8b8f06548bc6",
+      "stale": false
+    },
+    {
+      "depgraph_id": "PUT::/api/profile/boats/{0}",
+      "role": "checks",
+      "where": "profile.py \u2014 owner-edit gate joins through BoatCrew(role='owner', status='active')",
+      "confidence": "medium",
+      "remote_hash": "a745a02dcdd9363f968bcc56fdc025915512e1c625c409a904897a94426cc359",
+      "stale": false
+    },
+    {
+      "depgraph_id": "DELETE::/api/profile/boats/{0}",
+      "role": "checks",
+      "where": "profile.py \u2014 owner-delete gate same join",
+      "confidence": "medium",
+      "remote_hash": "9590d605dc1f424dfe16ef7672325301b3c8725ec40fe5828f9fff613c28bd20",
+      "stale": false
+    },
+    {
+      "depgraph_id": "GET::/api/boats/{0}/crew/visible",
+      "role": "checks",
+      "where": "boats.py \u2014 visibility decision treats BoatCrew owners as unfiltered viewers",
+      "confidence": "medium",
+      "remote_hash": "3630b92d9b98e4fab736df7ca9c7af792044895e20eb9cad7e50fe54e6dc360b",
+      "stale": false
+    }
+  ],
+  "fan_out": 7,
+  "confidence": "high",
+  "source": "model dossier warnings against owner_ids; co-owner promotion via ApprovalRequest (boat_coowner_invite, _promotion, _removal, _ownership_transfer)",
+  "definition_status": "human_reviewed",
+  "structural_hash": "8cacc1b4fa640078298942f35084564c11996604af2b241d0b748b6add0d1d28",
+  "dossier": "dossiers/rules/boat_ownership__via_boatcrew_not_owner_ids.md"
+}

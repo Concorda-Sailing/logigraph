@@ -8,7 +8,13 @@ Maintain this file by hand: remove a candidate when the rule has been authored a
 
 ## Tier 1 — high-leverage, fix-shaped (author first)
 
-### rule::auth::tier_c_org_scope_chokepoint
+_All 5 Tier-1 rules authored 2026-05-11 (commits referenced in each
+rule's `source` field). See `nodes/rules/` for the canonical
+definitions. The strike-throughs below are kept as a record of the
+candidates that surfaced from the discovery pass; the live rules are
+the source of truth going forward._
+
+### ~~rule::auth::tier_c_org_scope_chokepoint~~ — AUTHORED
 - **statement**: Every cross-org mutating endpoint that touches an org-owned resource (organization, regatta, event, product, discount, series, billing contact) must funnel its decision through `AuthUser.can_administer_orgs(owning_org_ids)` after resolving the resource's owning-org set, not just check role type.
 - **why**: Tier-C audit (commit `058aa8c`, 2026-05-05) closed a security finding where any `org_admin`/`delegate` of one club could mutate another club's records. New mutating endpoints have repeatedly been the regression vector.
 - **surfaces**:
@@ -18,7 +24,7 @@ Maintain this file by hand: remove a candidate when the rule has been authored a
   - `auth_middleware.AuthUser.can_administer_orgs` — chokepoint
 - **confidence**: high
 
-### rule::boat_ownership::via_boatcrew_not_owner_ids
+### ~~rule::boat_ownership::via_boatcrew_not_owner_ids~~ — AUTHORED
 - **statement**: Boat ownership is the set of `BoatCrew` rows with `role='owner'` and `status='active'`; the legacy `Boat.owner_ids` JSON column must not be the source of truth for new code.
 - **why**: Multiple model dossiers warn against `owner_ids`. Co-owner promotion flows through the `Approval` system; multiple owners are equal in authority.
 - **surfaces**:
@@ -28,7 +34,7 @@ Maintain this file by hand: remove a candidate when the rule has been authored a
   - `routers/invite.py::accept_invite` — coowner accept flips role
 - **confidence**: high
 
-### rule::events::personal_event_excluded_from_public_listings
+### ~~rule::events::personal_event_excluded_from_public_listings~~ — AUTHORED
 - **statement**: Public event-listing endpoints must filter `Event.category != "personal"`, and personal events must always carry `slug = None` (never `""`) to dodge SQLite UNIQUE-collision; personal events are visible only to their `owner_id`.
 - **why**: Commit `4fd165d` fixed slug-UNIQUE collision. The category-filter has bitten on commits `7570175` → revert `57f2e00` → re-fix `b887b73` (date-floor regression). Missing the filter leaks calendar rows.
 - **surfaces**:
@@ -37,7 +43,7 @@ Maintain this file by hand: remove a candidate when the rule has been authored a
   - `routers/events.py:89` — viewer-scoped to `owner_id`
 - **confidence**: high
 
-### rule::payments::transaction_person_binding
+### ~~rule::payments::transaction_person_binding~~ — AUTHORED
 - **statement**: Redeeming a paid `transaction_id` must require `Transaction.person_id == current_user.id` OR both NULL (guest-checkout); the NULL-NULL branch must not be tightened without preserving the guest path.
 - **why**: Pre-fix, any logged-in user could redeem someone else's payment (`74962cb`). Guest checkout (`3750138`) requires NULL-NULL.
 - **surfaces**:
@@ -47,7 +53,7 @@ Maintain this file by hand: remove a candidate when the rule has been authored a
   - `routers/events.py:1715-1724` — lazy-promote when user beats webhook
 - **confidence**: high
 
-### rule::datetime::utc_aware_storage_and_org_tz_display
+### ~~rule::datetime::utc_aware_storage_and_org_tz_display~~ — AUTHORED
 - **statement**: All datetime columns use `UtcDateTime` (naive-as-UTC stored, aware on read); UI rendering goes through `formatInOrgTz`/`ymdInOrgTz`; `<input type="datetime-local">` save paths funnel through `orgInputToUtcIso`. No raw `Date.getHours()`, `toLocaleString()` without `timeZone`, or `new Date().toISOString().slice()` shortcuts.
 - **why**: Memories `feedback_naive_datetime_convention` and `feedback_timezone_helpers_mandatory`; 2026-05-07 audit found ~30 components drifting; pre-2026-05-06 imports have ~5h drift.
 - **surfaces**:
