@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "id": "resource::concorda::boat_crew",
+  "kind": "ontology",
+  "subkind": "resource",
+  "title": "BoatCrew",
+  "summary": "A row representing one person's relationship to one boat \u2014 as owner or crew member, with a status (active/invited/declined/prospective). The canonical join for both ownership and crew membership.",
+  "source": {
+    "kind": "db_resource",
+    "table": "boat_crew",
+    "defined_in": "concorda-api/models/boat_crew.py"
+  },
+  "aliases": [
+    "boat_crew",
+    "BoatCrewMember",
+    "BoatCrewRead"
+  ],
+  "definition_status": "human_reviewed",
+  "structural_hash": "58cf8e8050780e1aa027f6259878b12a929d4af2e146d90bdde2cd07b18de5f1",
+  "dossier": "dossiers/ontology/resource__concorda__boat_crew.md",
+  "extractor": null
+}

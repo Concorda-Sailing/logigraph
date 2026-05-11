@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "id": "resource::concorda::boat",
+  "kind": "ontology",
+  "subkind": "resource",
+  "title": "Boat",
+  "summary": "A sailing vessel registered in Concorda. Carries identity (name, sail number, class, length), location, ratings, photos, and a list of position layouts. Ownership lives on `BoatCrew`, not on `Boat`.",
+  "source": {
+    "kind": "db_resource",
+    "table": "boats",
+    "defined_in": "concorda-api/models/boat.py"
+  },
+  "aliases": [
+    "Boat",
+    "BoatRead",
+    "vessel"
+  ],
+  "definition_status": "human_reviewed",
+  "structural_hash": "3e127128c14546fddfea79be23f0a230e456abc076873fc56a4ee338135aec87",
+  "dossier": "dossiers/ontology/resource__concorda__boat.md",
+  "extractor": null
+}

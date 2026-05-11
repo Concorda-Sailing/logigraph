@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "id": "role::relational::event_captain",
+  "kind": "ontology",
+  "subkind": "role",
+  "title": "Event Captain",
+  "summary": "A Person who is fielding one of their boats at one Event. The captain owns the `SailingEvent` row for that (event, boat) pair and is the primary authority for the boat's per-race plan and crew roster.",
+  "source": {
+    "kind": "relational",
+    "table": "SailingEvent",
+    "predicate": "SailingEvent.boat_uuid = B AND BoatCrew(boat_uuid=B, person_uuid=P, role='owner', status='active') exists",
+    "defined_in": "concorda-api/models/sailing_event.py"
+  },
+  "aliases": [
+    "captain",
+    "event_captain",
+    "race_captain"
+  ],
+  "definition_status": "human_reviewed",
+  "structural_hash": "6f6e3016e35047264baaac6a96b1c5a05fa87b4429478dc6f42c10c02c686049",
+  "dossier": "dossiers/ontology/role__relational__event_captain.md",
+  "extractor": null
+}
