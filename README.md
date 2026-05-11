@@ -95,3 +95,12 @@ Phase 0 (tracer bullet) — building.
   dossiers need re-review.
 - `DRIFT.md` — known failure modes and how the system surfaces them.
 - `../depgraph/` — the structural graph this layers on top of.
+
+## License
+
+[MIT](./LICENSE). Copyright (c) 2026 Logan Greenlee.
+
+The software is provided **AS IS**, without warranty of any kind,
+express or implied, including but not limited to merchantability,
+fitness for a particular purpose, and non-infringement. See the
+LICENSE file for the full text.
