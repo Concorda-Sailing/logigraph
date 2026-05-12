@@ -95,13 +95,24 @@
     },
     "warnings": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["code", "message"],
-        "properties": {
-          "code": { "type": "string" },
-          "message": { "type": "string" }
-        }
+      "items": { "$ref": "#/$defs/warning" }
+    }
+  },
+  "$defs": {
+    "warning": {
+      "type": "object",
+      "required": ["code", "kind", "severity", "message", "tracked", "discovered_at", "discovered_by"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string" },
+        "kind": { "enum": ["defect", "drift", "gap", "review_due", "incident"] },
+        "severity": { "enum": ["info", "low", "medium", "high", "critical"] },
+        "message": { "type": "string" },
+        "tracked": { "type": "boolean" },
+        "tracking_ref": { "type": ["string", "null"] },
+        "affected": { "type": "array", "items": { "type": "string" } },
+        "discovered_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "discovered_by": { "enum": ["reconcile", "author", "hook", "calibration"] }
       }
     }
   },

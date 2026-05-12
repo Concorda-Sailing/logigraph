@@ -348,8 +348,10 @@ def write_indexes(by_code: dict, by_file: dict, by_domain: dict, rule_count: int
     return c1, c2, c3
 
 
-def write_corpus_meta(node_count: int, rule_count: int, domain_count: int) -> bool:
-    """Flip regen_status to complete. Bit-stable on no-op regens."""
+def write_corpus_meta(node_count: int, rule_count: int, domain_count: int, flags: list[dict]) -> bool:
+    """Flip regen_status to complete. Persist `flags` (warning objects) so the
+    dashboard can render Needs Attention without re-running reconcile.
+    Bit-stable on no-op regens (timestamps excluded from diff)."""
     payload = {
         "schema_version": META_SCHEMA_VERSION,
         "regen_status": "complete",
@@ -358,8 +360,113 @@ def write_corpus_meta(node_count: int, rule_count: int, domain_count: int) -> bo
         "node_count": node_count,
         "rule_count": rule_count,
         "domain_count": domain_count,
+        "flags": flags,
     }
     return _write_index(CORPUS_META, payload, stable_excludes=("generated_at", "started_at"))
+
+
+def build_flags(
+    nodes: dict,
+    orphan_claims: list[tuple[str, str]],
+    stale_claims: list[tuple[str, str]],
+    orphan_domain: list[tuple[str, str]],
+    mediation_collisions: list[tuple[str, list[str]]],
+) -> list[dict]:
+    """Aggregate corpus-level warnings + per-node authored warnings into a
+    single flags array (universal warning shape). reconcile-derived
+    detections get kind/severity based on the detector; authored warnings
+    come along verbatim."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    out: list[dict] = []
+
+    # reconcile-derived: mediation collisions
+    for mech, ids in mediation_collisions:
+        out.append({
+            "code": "mediation_collision",
+            "kind": "defect",
+            "severity": "high",
+            "message": f"`{mech}` mediates {len(ids)} distinct relationships — shared storage signals a domain category error",
+            "tracked": False,
+            "affected": list(ids),
+            "discovered_at": today,
+            "discovered_by": "reconcile",
+        })
+
+    # reconcile-derived: stale claims
+    for owner, cid in stale_claims:
+        out.append({
+            "code": "stale_claim",
+            "kind": "drift",
+            "severity": "medium",
+            "message": f"{owner} claims {cid}, but the depgraph node's structural_hash has drifted — dossier may be outdated",
+            "tracked": False,
+            "affected": [owner, cid],
+            "discovered_at": today,
+            "discovered_by": "reconcile",
+        })
+
+    # reconcile-derived: orphan claims
+    for owner, cid in orphan_claims:
+        out.append({
+            "code": "orphan_claim",
+            "kind": "drift",
+            "severity": "high",
+            "message": f"{owner} claims {cid}, but no such depgraph node exists",
+            "tracked": False,
+            "affected": [owner, cid],
+            "discovered_at": today,
+            "discovered_by": "reconcile",
+        })
+
+    # reconcile-derived: orphan domain refs
+    for rid, ref in orphan_domain:
+        out.append({
+            "code": "orphan_domain_ref",
+            "kind": "gap",
+            "severity": "medium",
+            "message": f"{rid} references domain node {ref}, which is not authored",
+            "tracked": False,
+            "affected": [rid, ref],
+            "discovered_at": today,
+            "discovered_by": "reconcile",
+        })
+
+    # reconcile-derived: llm_drafted backlog (review_due)
+    for nid, (_, data) in nodes.items():
+        if data.get("definition_status") == "llm_drafted":
+            out.append({
+                "code": "unreviewed_dossier",
+                "kind": "review_due",
+                "severity": "low",
+                "message": f"{nid} is llm_drafted; needs human review",
+                "tracked": False,
+                "affected": [nid],
+                "discovered_at": today,
+                "discovered_by": "reconcile",
+            })
+        elif data.get("definition_status") == "stub":
+            out.append({
+                "code": "stub_dossier",
+                "kind": "gap",
+                "severity": "medium",
+                "message": f"{nid} is a stub; dossier content not yet authored",
+                "tracked": False,
+                "affected": [nid],
+                "discovered_at": today,
+                "discovered_by": "reconcile",
+            })
+
+    # Author-populated: warnings on each node carried up verbatim.
+    for nid, (_, data) in nodes.items():
+        for w in data.get("warnings", []) or []:
+            # Make sure the affected list includes the host node id so the
+            # dashboard's per-node lookup catches it.
+            affected = list(w.get("affected") or [])
+            if nid not in affected:
+                affected = [nid] + affected
+            out.append({**w, "affected": affected})
+
+    return out
 
 
 def detect_mediation_collisions(nodes: dict) -> list[tuple[str, list[str]]]:
@@ -420,9 +527,12 @@ def main() -> int:
 
     by_code, by_file, by_domain = build_indexes(nodes, depgraph_corpus)
 
+    collisions = detect_mediation_collisions(nodes)
+    flags = build_flags(nodes, orphan_claims, stale_claims, orphan_domain, collisions)
+
     if not args.report_only:
         c_code, c_file, c_ont = write_indexes(by_code, by_file, by_domain, rule_count)
-        meta_changed = write_corpus_meta(len(nodes), rule_count, domain_count)
+        meta_changed = write_corpus_meta(len(nodes), rule_count, domain_count, flags)
     else:
         c_code = c_file = c_ont = meta_changed = False
 
@@ -447,7 +557,6 @@ def main() -> int:
     if len(stale_claims) > 10:
         print(f"  ... and {len(stale_claims) - 10} more")
 
-    collisions = detect_mediation_collisions(nodes)
     print(f"mediation coll.:  {len(collisions)}")
     for mech, ids in collisions:
         print(f"  ⚠ `{mech}` mediates {len(ids)} distinct relationships:")
