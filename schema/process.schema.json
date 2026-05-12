@@ -4,7 +4,7 @@
   "title": "Logigraph process node",
   "description": "One node = one business-process flow. Acts as an index: surfaces the code, UI, broadcasts, and side-effects a flow touches so an editor of any one piece can see the rest. NOT a tutorial — the dossier is optional and terse. Pointer semantics, not narrative.",
   "type": "object",
-  "required": ["schema_version", "id", "kind", "title", "summary", "trigger", "steps", "definition_status", "structural_hash"],
+  "required": ["schema_version", "id", "kind", "title", "summary", "flow", "steps", "definition_status", "structural_hash"],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
@@ -27,9 +27,25 @@
       "type": "string",
       "description": "One-paragraph elevator pitch. What kicks it off, what it changes, what downstream consumers exist. Read at the top of the hook injection."
     },
-    "trigger": {
-      "type": "string",
-      "description": "Depgraph node id of the entry point — typically an endpoint (\"POST::/api/...\") or a scheduled-job node. Single id; processes with multiple triggers should split or use ui_surfaces.role='secondary_entry'."
+    "flow": {
+      "type": "object",
+      "required": ["action"],
+      "additionalProperties": false,
+      "description": "How this flow gets kicked off. Every flow must carry an `action` describing the entry point in human terms — for user-initiated flows that means a user action ('User clicks X on Y'); for headless flows that means the system event ('Stripe webhook fires', 'Cron at 02:00 UTC'). UI + endpoint pointers are optional but recommended for user flows.",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "One-line description of what kicks off the flow. User-initiated flows MUST describe this as a user action (e.g. 'User clicks Accept on the invite landing page')."
+        },
+        "ui_surface": {
+          "type": ["string", "null"],
+          "description": "Optional depgraph node id of the UI element (component, page) the user interacts with to start the flow. Recommended for user-initiated flows; omit for headless triggers."
+        },
+        "endpoint": {
+          "type": ["string", "null"],
+          "description": "Optional depgraph node id of the HTTP endpoint (or handler function) that receives the trigger. Typical for user actions: the API endpoint the UI calls."
+        }
+      }
     },
     "steps": {
       "type": "array",
