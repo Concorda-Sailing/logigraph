@@ -70,6 +70,7 @@ BY_DOMAIN_INDEX = INDEX_DIR / "by_domain.json"
 CORPUS_META = NODES / "_meta.json"
 DOMAIN_SCHEMA = TOOL_ROOT / "schema" / "domain.schema.json"
 RULE_SCHEMA = TOOL_ROOT / "schema" / "rule.schema.json"
+PROCESS_SCHEMA = TOOL_ROOT / "schema" / "process.schema.json"
 TELEMETRY_DIR = LOGIGRAPH / "telemetry"
 INJECTIONS_LOG = TELEMETRY_DIR / "injections.jsonl"
 ACKS_LOG = TELEMETRY_DIR / "acknowledgments.jsonl"
@@ -220,6 +221,25 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 if missing and data.get("definition_status") != "stub":
                     print(f"DOSSIER {path}: missing sections {missing}", file=sys.stderr)
                     bad += 1
+        elif kind == "process":
+            err = _validate_json_schema(data, PROCESS_SCHEMA)
+            if err:
+                print(f"INVALID {path}: {err}", file=sys.stderr)
+                bad += 1
+                continue
+            # Reference-integrity: every transition.to must be an existing step id.
+            step_ids = {s["id"] for s in data.get("steps", [])}
+            for step in data.get("steps", []):
+                for tr in step.get("transitions", []) or []:
+                    if tr["to"] not in step_ids:
+                        print(
+                            f"INVALID {path}: step '{step['id']}' transitions to "
+                            f"'{tr['to']}' which is not a step in this process",
+                            file=sys.stderr,
+                        )
+                        bad += 1
+            # Dossier is intentionally optional for processes (pointer semantics).
+            # No required-sections check.
         else:
             print(f"UNKNOWN KIND {path}: kind={kind}", file=sys.stderr)
             bad += 1

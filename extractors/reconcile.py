@@ -123,16 +123,48 @@ def load_depgraph_corpus() -> dict[str, dict]:
     return by_id
 
 
+def _refresh_one_claim_list(
+    owner_id: str,
+    claims: list[dict],
+    depgraph_corpus: dict[str, dict],
+    orphan_claims: list[tuple[str, str]],
+    stale_claims: list[tuple[str, str]],
+) -> None:
+    """Mutate `claims` in place: refresh remote_hash from depgraph, toggle stale.
+    Appends to orphan_claims / stale_claims lists for reporting."""
+    for claim in claims:
+        cid = claim.get("depgraph_id")
+        if not cid:
+            continue
+        depnode = depgraph_corpus.get(cid)
+        if depnode is None:
+            orphan_claims.append((owner_id, cid))
+            claim["stale"] = True
+            continue
+        current_hash = depnode.get("structural_hash")
+        stored_hash = claim.get("remote_hash")
+        if stored_hash and current_hash and stored_hash != current_hash:
+            claim["stale"] = True
+            stale_claims.append((owner_id, cid))
+        else:
+            claim["stale"] = False
+        if current_hash:
+            claim["remote_hash"] = current_hash
+
+
 def refresh_claims_and_validate(
     nodes: dict[str, tuple[Path, dict]],
     depgraph_corpus: dict[str, dict],
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
-    """For every rule:
-      - Refresh remote_hash from current depgraph and toggle stale flag.
-      - Compute fan_out from claims_code.
+    """For every rule and process:
+      - Refresh remote_hash on every claim from current depgraph; toggle stale.
+      - Compute fan_out (rules only — processes' fan_out is implicit in step count).
       - Collect orphan claims (claim_id not in depgraph corpus).
-      - Collect orphan domain refs (referenced domain id not authored).
+      - Collect orphan domain refs (rules only — referenced domain id not authored).
       - Collect stale claims (remote_hash diverged from current).
+
+    Process nodes refresh claims_code per step PLUS ui_surfaces at the process
+    level — same drift-detection machinery for both code and UI dependents.
 
     Mutates the loaded node dicts in place. Returns the three orphan lists
     for reporting.
@@ -143,33 +175,29 @@ def refresh_claims_and_validate(
     orphan_domain: list[tuple[str, str]] = []
     stale_claims: list[tuple[str, str]] = []
 
-    for rid, (_, data) in nodes.items():
-        if data.get("kind") != "rule":
-            continue
-        for claim in data.get("claims_code", []):
-            cid = claim.get("depgraph_id")
-            if not cid:
-                continue
-            depnode = depgraph_corpus.get(cid)
-            if depnode is None:
-                orphan_claims.append((rid, cid))
-                claim["stale"] = True
-                continue
-            current_hash = depnode.get("structural_hash")
-            stored_hash = claim.get("remote_hash")
-            if stored_hash and current_hash and stored_hash != current_hash:
-                claim["stale"] = True
-                stale_claims.append((rid, cid))
-            else:
-                claim["stale"] = False
-            # Refresh remote_hash on every regen so subsequent runs detect drift.
-            if current_hash:
-                claim["remote_hash"] = current_hash
-        data["fan_out"] = len(data.get("claims_code", []))
-
-        for ref in data.get("references_domain", []):
-            if ref not in domain_ids:
-                orphan_domain.append((rid, ref))
+    for nid, (_, data) in nodes.items():
+        kind = data.get("kind")
+        if kind == "rule":
+            _refresh_one_claim_list(
+                nid, data.get("claims_code", []),
+                depgraph_corpus, orphan_claims, stale_claims,
+            )
+            data["fan_out"] = len(data.get("claims_code", []))
+            for ref in data.get("references_domain", []):
+                if ref not in domain_ids:
+                    orphan_domain.append((nid, ref))
+        elif kind == "process":
+            for step in data.get("steps", []):
+                _refresh_one_claim_list(
+                    f"{nid}#{step.get('id', '?')}",
+                    step.get("claims_code", []),
+                    depgraph_corpus, orphan_claims, stale_claims,
+                )
+            _refresh_one_claim_list(
+                f"{nid}#ui",
+                data.get("ui_surfaces", []),
+                depgraph_corpus, orphan_claims, stale_claims,
+            )
 
     return orphan_claims, stale_claims, orphan_domain
 
@@ -383,6 +411,7 @@ def main() -> int:
 
     rule_count = sum(1 for _, (_, d) in nodes.items() if d.get("kind") == "rule")
     domain_count = sum(1 for _, (_, d) in nodes.items() if d.get("kind") == "domain")
+    process_count = sum(1 for _, (_, d) in nodes.items() if d.get("kind") == "process")
 
     if not args.report_only:
         node_writes = persist_node_updates(nodes)
@@ -397,7 +426,7 @@ def main() -> int:
     else:
         c_code = c_file = c_ont = meta_changed = False
 
-    print(f"loaded:           {len(nodes)} logigraph nodes ({rule_count} rules, {domain_count} domain)")
+    print(f"loaded:           {len(nodes)} logigraph nodes ({rule_count} rules, {domain_count} domain, {process_count} process)")
     print(f"depgraph corpus:  {len(depgraph_corpus)} nodes")
     print(f"node updates:     {node_writes} (claim hash / fan_out refresh)")
     print(f"index changes:    by_code={'updated' if c_code else 'unchanged'}, by_file={'updated' if c_file else 'unchanged'}, by_domain={'updated' if c_ont else 'unchanged'}")

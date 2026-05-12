@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "logigraph.process",
+  "title": "Logigraph process node",
+  "description": "One node = one business-process flow. Acts as an index: surfaces the code, UI, broadcasts, and side-effects a flow touches so an editor of any one piece can see the rest. NOT a tutorial — the dossier is optional and terse. Pointer semantics, not narrative.",
+  "type": "object",
+  "required": ["schema_version", "id", "kind", "title", "summary", "trigger", "steps", "definition_status", "structural_hash"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^process::[a-z_]+::[a-z0-9_]+$",
+      "description": "Form: process::<category>::<short_name>. E.g. process::crew_invite::accept."
+    },
+    "kind": {
+      "const": "process"
+    },
+    "title": {
+      "type": "string",
+      "description": "Short human label. E.g. \"Crew invite acceptance\"."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One-paragraph elevator pitch. What kicks it off, what it changes, what downstream consumers exist. Read at the top of the hook injection."
+    },
+    "trigger": {
+      "type": "string",
+      "description": "Depgraph node id of the entry point — typically an endpoint (\"POST::/api/...\") or a scheduled-job node. Single id; processes with multiple triggers should split or use ui_surfaces.role='secondary_entry'."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" },
+      "description": "Ordered list of process steps. First step is implicitly the entry. Steps with no transitions are terminals."
+    },
+    "ui_surfaces": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ui_surface" },
+      "description": "Cross-repo UI dependents the hook should surface. Process-level (not per-step) by default; multi-page flows can override per-step in a future extension."
+    },
+    "broadcasts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Websocket / event-bus event names this flow emits. Often invisible from depgraph edges; flagging them here lets the hook warn editors about silent downstream consumers."
+    },
+    "side_effects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Terse plain-English statements of observable state changes (DB writes, deletes, status flips, fan-outs). One per line; the hook displays them so an editor knows what the flow's contract is supposed to preserve."
+    },
+    "enforces_rules": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^rule::[a-z_]+::[a-z0-9_]+$" },
+      "description": "Rule ids this process is expected to enforce somewhere in its steps. Reverse-indexed by reconcile into rule.enforced_in_processes (derived, not authored)."
+    },
+    "definition_status": {
+      "enum": ["stub", "llm_drafted", "human_reviewed"]
+    },
+    "structural_hash": {
+      "type": "string"
+    },
+    "dossier": {
+      "type": "string",
+      "description": "Path to the optional dossier markdown (relative to LOGIGRAPH). Dossier is intentionally NOT required to carry structured sections — it's prose, used sparingly, often just \"## Why this is a process and not N rules\"."
+    },
+    "extractor": {
+      "type": ["string", "null"]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": ["id", "title", "claims_code"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "Within-process step id. Stable; transitions reference these."
+        },
+        "title": {
+          "type": "string",
+          "description": "One-line what-this-step-does. The pointer label, not a paragraph."
+        },
+        "claims_code": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/claim" },
+          "description": "Depgraph nodes that implement this step. Mirrors rule.claims_code shape so reconcile's drift detection works the same way."
+        },
+        "enforces_rules": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^rule::[a-z_]+::[a-z0-9_]+$" },
+          "description": "Rule ids enforced AT this step. Per-step granularity so the hook can say \"this step enforces rule X.\""
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["to"],
+            "additionalProperties": false,
+            "properties": {
+              "to": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "when": { "type": ["string", "null"] }
+            }
+          },
+          "description": "Outgoing edges. Empty / missing = terminal step. Multiple = branch (each carries a `when` predicate in prose). `to` is a step id within this process; reconcile validates the reference."
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "required": ["depgraph_id"],
+      "additionalProperties": false,
+      "properties": {
+        "depgraph_id": { "type": "string" },
+        "role": {
+          "enum": ["implements", "enforces", "renders", "triggers", "consumes"],
+          "description": "Why this code is claimed by this step. 'implements' = primary code that runs the step; 'enforces' = guard / invariant check; 'renders' = UI; 'triggers' = initiator; 'consumes' = downstream reaction."
+        },
+        "where": { "type": ["string", "null"] },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "remote_hash": { "type": ["string", "null"] },
+        "stale": { "type": "boolean" }
+      }
+    },
+    "ui_surface": {
+      "type": "object",
+      "required": ["depgraph_id", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "depgraph_id": { "type": "string" },
+        "role": {
+          "enum": ["primary_entry", "secondary_entry", "service_invoker", "post_effect", "error_surface"],
+          "description": "How this UI piece participates in the flow. primary_entry = where user starts; service_invoker = the api-call wrapper; post_effect = UI that updates after success (WS handlers, refetch triggers); error_surface = handles failure modes."
+        },
+        "where": { "type": ["string", "null"] },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "remote_hash": { "type": ["string", "null"] },
+        "stale": { "type": "boolean" }
+      }
+    }
+  }
+}
