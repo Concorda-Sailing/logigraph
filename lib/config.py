@@ -22,6 +22,7 @@ Substitutions available in `extractor` tokens:
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -61,9 +62,9 @@ def _load_tomllib():
             return None
 
 
-def load_project_config(data_dir: Path) -> dict:
-    """Read project.toml from `data_dir/project.toml` (or one level up).
-    Returns {} if missing or unparseable."""
+@lru_cache(maxsize=None)
+def _load_project_config_cached(data_dir_str: str) -> dict:
+    data_dir = Path(data_dir_str)
     candidates = [data_dir / "project.toml", data_dir.parent / "project.toml"]
     tomllib = _load_tomllib()
     if tomllib is None:
@@ -76,6 +77,17 @@ def load_project_config(data_dir: Path) -> dict:
         except Exception:
             return {}
     return {}
+
+
+def load_project_config(data_dir: Path) -> dict:
+    """Read project.toml from `data_dir/project.toml` (or one level up).
+    Returns {} if missing or unparseable.
+
+    Result is memoized per `data_dir` for the process lifetime — project.toml
+    doesn't change mid-process for our workloads (CLI invocations, hook fires,
+    long-running graphui). Callers must treat the returned dict as immutable.
+    """
+    return _load_project_config_cached(str(data_dir))
 
 
 def project_repos(data_dir: Path) -> dict[str, dict]:
@@ -162,3 +174,32 @@ def repo_for_basename(data_dir: Path, basename: str) -> Optional[dict]:
         if info["basename"] == basename:
             return info
     return None
+
+
+def path_to_repo_relative(abs_path: Path, data_dir: Path) -> Optional[tuple[str, str]]:
+    """Given an absolute filesystem path, find which configured [repos.*]
+    checkout it lives under and return (basename, rel_path_str).
+
+    Returns None if the path isn't under any configured repo's `path`.
+    Works for both flat checkouts (~/<basename>/) and nested ones
+    (~/projects/<group>/<basename>/) because it consults the actual
+    resolved `path` from project.toml rather than assuming layout.
+    """
+    try:
+        ap = Path(abs_path).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return None
+    for info in project_repos(data_dir).values():
+        try:
+            rel = ap.relative_to(info["path"])
+        except ValueError:
+            continue
+        return info["basename"], str(rel)
+    return None
+
+
+def basename_path_map(data_dir: Path) -> dict[str, Path]:
+    """{basename: resolved Path} for every [repos.*] table. Convenience for
+    callers that have a `source.repo` basename and need the on-disk path
+    without iterating every node."""
+    return {info["basename"]: info["path"] for info in project_repos(data_dir).values()}

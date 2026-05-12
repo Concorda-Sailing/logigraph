@@ -40,7 +40,12 @@ from pathlib import Path
 
 TOOL_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_ROOT))
-from lib.config import resolve_data_dir, load_project_config, repo_basenames  # noqa: E402
+from lib.config import (  # noqa: E402
+    resolve_data_dir,
+    load_project_config,
+    repo_basenames,
+    path_to_repo_relative,
+)
 
 
 def _project_name() -> str:
@@ -130,21 +135,9 @@ def target_files(tool_name: str, tool_input: dict) -> list[str]:
 
 
 def repo_relative(abs_path: str) -> tuple[str, str] | None:
-    """Decompose home-rooted absolute path into (repo, rel) when the home-
-    relative first segment is a configured [repos.*] basename."""
-    home = str(Path.home())
-    p = Path(abs_path).expanduser().resolve()
-    parts = p.parts
-    home_parts = Path(home).parts
-    if len(parts) <= len(home_parts):
-        return None
-    if parts[: len(home_parts)] != home_parts:
-        return None
-    seg = parts[len(home_parts)]
-    if seg not in repo_basenames(LOGIGRAPH):
-        return None
-    rel = "/".join(parts[len(home_parts) + 1 :])
-    return seg, rel
+    """Resolve an absolute filesystem path to (basename, rel) by consulting
+    [repos.*].path. Works for any checkout layout."""
+    return path_to_repo_relative(abs_path, LOGIGRAPH)
 
 
 def load_meta_and_status() -> tuple[dict, list[str]]:

@@ -29,7 +29,13 @@ from pathlib import Path
 # Schemas + lib/ travel with the tool framework, not the per-project data.
 TOOL_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_ROOT))
-from lib.config import resolve_data_dir, load_project_config, repo_basenames  # noqa: E402
+from lib.config import (  # noqa: E402
+    resolve_data_dir,
+    load_project_config,
+    repo_basenames,
+    project_repos,
+    path_to_repo_relative,
+)
 
 LOGIGRAPH = resolve_data_dir("LOGIGRAPH_DATA_DIR")
 
@@ -436,21 +442,10 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
 
 def repo_relative(abs_path: str) -> tuple[str, str] | None:
-    """Same shape as depgraph's helper. /home/lgreenlee/<repo>/foo/bar.py
-    → ('<repo>', 'foo/bar.py') if <repo> is a configured [repos.*] path."""
-    home = str(Path.home())
-    p = Path(abs_path).expanduser().resolve()
-    parts = p.parts
-    home_parts = Path(home).parts
-    if len(parts) <= len(home_parts):
-        return None
-    if parts[: len(home_parts)] != home_parts:
-        return None
-    seg = parts[len(home_parts)]
-    if seg not in repo_basenames(LOGIGRAPH):
-        return None
-    rel = "/".join(parts[len(home_parts) + 1 :])
-    return seg, rel
+    """Same shape as depgraph's helper. Resolves any absolute path under a
+    configured [repos.*].path to (basename, rel) regardless of checkout
+    layout."""
+    return path_to_repo_relative(abs_path, LOGIGRAPH)
 
 
 def find_rules_for_target(target: str) -> list[str]:
@@ -466,10 +461,9 @@ def find_rules_for_target(target: str) -> list[str]:
     rr = repo_relative(target)
     if not rr:
         # try treating as repo-relative directly against each configured repo
-        for repo_name in repo_basenames(LOGIGRAPH):
-            cand = Path.home() / repo_name / target
-            if cand.exists():
-                rr = (repo_name, target)
+        for info in project_repos(LOGIGRAPH).values():
+            if (info["path"] / target).exists():
+                rr = (info["basename"], target)
                 break
     if not rr:
         return []

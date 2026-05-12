@@ -162,7 +162,11 @@ def _resolve_target(fm: dict) -> Path | None:
     if len(parts) != 2:
         return None
     repo, sub = parts
-    return Path.home() / repo / sub
+    from lib.config import repo_for_basename
+    info = repo_for_basename(CALIBRATION.parent, repo)
+    if info is None:
+        return None
+    return info["path"] / sub
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
