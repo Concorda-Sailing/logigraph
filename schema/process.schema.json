@@ -63,10 +63,15 @@
       "items": { "type": "string" },
       "description": "Websocket / event-bus event names this flow emits. Often invisible from depgraph edges; flagging them here lets the hook warn editors about silent downstream consumers."
     },
+    "state_modifications": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Terse plain-English statements of intentional state changes the flow performs — DB writes, deletes, status flips, broadcasts the flow exists to emit. The flow's contract; editors should preserve these. Empty is fine if the flow is purely a lookup/query."
+    },
     "side_effects": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Terse plain-English statements of observable state changes (DB writes, deletes, status flips, fan-outs). One per line; the hook displays them so an editor knows what the flow's contract is supposed to preserve."
+      "description": "Actual side effects — incidental or unintended consequences of running the flow that aren't the flow's purpose. Metrics counters, log lines, cache invalidations downstream, audit-trail writes. Usually empty; distinct from `state_modifications` which are the point. Flag here when something happens on the way that an editor might break or need to preserve unrelated to the flow's main contract."
     },
     "enforces_rules": {
       "type": "array",
