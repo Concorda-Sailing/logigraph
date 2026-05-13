@@ -926,6 +926,70 @@ def cmd_rule_finalize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _rewrite_dossier_frontmatter(
+    dossier_path: Path,
+    structural_hash: str,
+    new_status: str,
+    actor: str | None,
+) -> None:
+    """Rewrite a dossier's frontmatter for a bump action.
+
+    - Sets definition_status to new_status.
+    - When new_status == 'human_reviewed': sets last_reviewed + last_reviewed_against_hash
+      + reviewed_by + reviewed_at.
+    - When new_status != 'human_reviewed': drops last_reviewed / last_reviewed_against_hash
+      / reviewed_by / reviewed_at if present.
+    - Preserves every other frontmatter field (notably authored_by).
+    """
+    import datetime as _dt
+    text = dossier_path.read_text()
+    if not text.startswith("---"):
+        return
+    end = text.index("\n---\n", 4)
+    fm_block = text[4:end]
+    body = text[end + 5:]
+    today = _dt.date.today().isoformat()
+    reviewed = (new_status == "human_reviewed")
+    handled: set[str] = set()
+    out: list[str] = []
+    for line in fm_block.splitlines():
+        s = line.strip()
+        if s.startswith("definition_status:"):
+            out.append(f"definition_status: {new_status}")
+            handled.add("definition_status")
+        elif s.startswith("last_reviewed:"):
+            if reviewed:
+                out.append(f"last_reviewed: {today}")
+                handled.add("last_reviewed")
+            # else: drop
+        elif s.startswith("last_reviewed_against_hash:"):
+            if reviewed:
+                out.append(f"last_reviewed_against_hash: {structural_hash}")
+                handled.add("last_reviewed_against_hash")
+        elif s.startswith("reviewed_by:"):
+            if reviewed and actor:
+                out.append(f"reviewed_by: {actor}")
+                handled.add("reviewed_by")
+        elif s.startswith("reviewed_at:"):
+            if reviewed:
+                out.append(f"reviewed_at: {today}")
+                handled.add("reviewed_at")
+        else:
+            out.append(line)
+    if "definition_status" not in handled:
+        out.append(f"definition_status: {new_status}")
+    if reviewed:
+        if "last_reviewed" not in handled:
+            out.append(f"last_reviewed: {today}")
+        if "last_reviewed_against_hash" not in handled:
+            out.append(f"last_reviewed_against_hash: {structural_hash}")
+        if actor and "reviewed_by" not in handled:
+            out.append(f"reviewed_by: {actor}")
+        if "reviewed_at" not in handled:
+            out.append(f"reviewed_at: {today}")
+    dossier_path.write_text("---\n" + "\n".join(out).strip("\n") + "\n---\n" + body)
+
+
 def cmd_rule_bump(args: argparse.Namespace) -> int:
     """Promote a rule's definition_status (default: → human_reviewed). Updates
     both the JSON node and the dossier frontmatter."""
@@ -941,34 +1005,15 @@ def cmd_rule_bump(args: argparse.Namespace) -> int:
     print(f"bumped {node_path.relative_to(LOGIGRAPH)} → definition_status: {new_status}")
 
     dossier_path = _rule_dossier_path(rule_id)
+    actor = args.actor or _default_actor()
+    paths = [node_path]
     if dossier_path.exists():
-        text = dossier_path.read_text()
-        if text.startswith("---"):
-            end = text.index("\n---\n", 4)
-            fm = text[4:end]
-            body = text[end + 5:]
-            import datetime as _dt
-            today = _dt.date.today().isoformat()
-            new_lines = []
-            seen_status = seen_reviewed = seen_hash = False
-            for line in fm.splitlines():
-                s = line.strip()
-                if s.startswith("definition_status:"):
-                    new_lines.append(f"definition_status: {new_status}")
-                    seen_status = True
-                elif s.startswith("last_reviewed:"):
-                    new_lines.append(f"last_reviewed: {today}")
-                    seen_reviewed = True
-                elif s.startswith("last_reviewed_against_hash:"):
-                    new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
-                    seen_hash = True
-                else:
-                    new_lines.append(line)
-            if not seen_status: new_lines.append(f"definition_status: {new_status}")
-            if not seen_reviewed: new_lines.append(f"last_reviewed: {today}")
-            if not seen_hash: new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
-            dossier_path.write_text("---\n" + "\n".join(new_lines).strip("\n") + "\n---\n" + body)
-            print(f"updated {dossier_path.relative_to(LOGIGRAPH)} frontmatter")
+        _rewrite_dossier_frontmatter(dossier_path, node.get("structural_hash", ""), new_status, actor)
+        print(f"updated {dossier_path.relative_to(LOGIGRAPH)} frontmatter")
+        paths.append(dossier_path)
+
+    prefix = "review" if new_status == "human_reviewed" else "chore(bump)"
+    _git_commit_if_changed(LOGIGRAPH, paths, f"{prefix}: {rule_id}")
     return 0
 
 
@@ -991,41 +1036,21 @@ def cmd_domain_bump(args: argparse.Namespace) -> int:
     print(f"bumped {node_path.relative_to(LOGIGRAPH)} → definition_status: {new_status}")
 
     dossier_path = _domain_dossier_path(domain_id)
+    actor = args.actor or _default_actor()
+    paths = [node_path]
     if dossier_path.exists():
-        text = dossier_path.read_text()
-        if text.startswith("---"):
-            end = text.index("\n---\n", 4)
-            fm = text[4:end]
-            body = text[end + 5:]
-            import datetime as _dt
-            today = _dt.date.today().isoformat()
-            new_lines = []
-            seen_status = seen_reviewed = seen_hash = False
-            for line in fm.splitlines():
-                s = line.strip()
-                if s.startswith("definition_status:"):
-                    new_lines.append(f"definition_status: {new_status}")
-                    seen_status = True
-                elif s.startswith("last_reviewed:"):
-                    new_lines.append(f"last_reviewed: {today}")
-                    seen_reviewed = True
-                elif s.startswith("last_reviewed_against_hash:"):
-                    new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
-                    seen_hash = True
-                else:
-                    new_lines.append(line)
-            if not seen_status: new_lines.append(f"definition_status: {new_status}")
-            if not seen_reviewed: new_lines.append(f"last_reviewed: {today}")
-            if not seen_hash: new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
-            dossier_path.write_text("---\n" + "\n".join(new_lines).strip("\n") + "\n---\n" + body)
-            print(f"updated {dossier_path.relative_to(LOGIGRAPH)} frontmatter")
+        _rewrite_dossier_frontmatter(dossier_path, node.get("structural_hash", ""), new_status, actor)
+        print(f"updated {dossier_path.relative_to(LOGIGRAPH)} frontmatter")
+        paths.append(dossier_path)
+
+    prefix = "review" if new_status == "human_reviewed" else "chore(bump)"
+    _git_commit_if_changed(LOGIGRAPH, paths, f"{prefix}: {domain_id}")
     return 0
 
 
 def cmd_process_bump(args: argparse.Namespace) -> int:
     """Promote a process node's definition_status (default: → human_reviewed).
-    Updates both the JSON node and the dossier frontmatter.
-    Mirrors cmd_domain_bump exactly — keep the two in sync."""
+    Updates both the JSON node and the dossier frontmatter."""
     process_id = args.id
     try:
         node_path = _process_node_path(process_id)
@@ -1042,34 +1067,15 @@ def cmd_process_bump(args: argparse.Namespace) -> int:
     print(f"bumped {node_path.relative_to(LOGIGRAPH)} → definition_status: {new_status}")
 
     dossier_path = _process_dossier_path(process_id)
+    actor = args.actor or _default_actor()
+    paths = [node_path]
     if dossier_path.exists():
-        text = dossier_path.read_text()
-        if text.startswith("---"):
-            end = text.index("\n---\n", 4)
-            fm = text[4:end]
-            body = text[end + 5:]
-            import datetime as _dt
-            today = _dt.date.today().isoformat()
-            new_lines = []
-            seen_status = seen_reviewed = seen_hash = False
-            for line in fm.splitlines():
-                s = line.strip()
-                if s.startswith("definition_status:"):
-                    new_lines.append(f"definition_status: {new_status}")
-                    seen_status = True
-                elif s.startswith("last_reviewed:"):
-                    new_lines.append(f"last_reviewed: {today}")
-                    seen_reviewed = True
-                elif s.startswith("last_reviewed_against_hash:"):
-                    new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
-                    seen_hash = True
-                else:
-                    new_lines.append(line)
-            if not seen_status: new_lines.append(f"definition_status: {new_status}")
-            if not seen_reviewed: new_lines.append(f"last_reviewed: {today}")
-            if not seen_hash: new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
-            dossier_path.write_text("---\n" + "\n".join(new_lines).strip("\n") + "\n---\n" + body)
-            print(f"updated {dossier_path.relative_to(LOGIGRAPH)} frontmatter")
+        _rewrite_dossier_frontmatter(dossier_path, node.get("structural_hash", ""), new_status, actor)
+        print(f"updated {dossier_path.relative_to(LOGIGRAPH)} frontmatter")
+        paths.append(dossier_path)
+
+    prefix = "review" if new_status == "human_reviewed" else "chore(bump)"
+    _git_commit_if_changed(LOGIGRAPH, paths, f"{prefix}: {process_id}")
     return 0
 
 
@@ -1310,16 +1316,19 @@ def main() -> int:
     p_rb = sub.add_parser("rule-bump", help="Promote a rule's definition_status (default → human_reviewed)")
     p_rb.add_argument("id")
     p_rb.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
+    p_rb.add_argument("--actor", default=None, help="Reviewer (default: git config user.name)")
     p_rb.set_defaults(func=cmd_rule_bump)
 
     p_db = sub.add_parser("domain-bump", help="Promote a domain node's definition_status (default → human_reviewed)")
     p_db.add_argument("id")
     p_db.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
+    p_db.add_argument("--actor", default=None, help="Reviewer (default: git config user.name)")
     p_db.set_defaults(func=cmd_domain_bump)
 
     p_pb = sub.add_parser("process-bump", help="Promote a process node's definition_status (default → human_reviewed)")
     p_pb.add_argument("id")
     p_pb.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
+    p_pb.add_argument("--actor", default=None, help="Reviewer (default: git config user.name)")
     p_pb.set_defaults(func=cmd_process_bump)
 
     p_rollup = sub.add_parser("rollup", help="Emit code rollup for a domain entity")
