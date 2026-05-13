@@ -100,9 +100,13 @@ def _chunk_hash(text: str) -> str:
 def _text_sources_for_node(node: dict) -> list[tuple[str, str]]:
     """Return [(source_field, text), ...] for the prose sources on a node.
 
-    Rule:    statement        → source_field "rule_statement"
-    Domain:  summary          → source_field "domain_summary"
-    Process: each step.description → source_field "process_step" (one per step)
+    Rule:    statement                → source_field "rule_statement"
+    Domain:  summary                  → source_field "domain_summary"
+    Process: summary + each step.title → source_fields "process_summary"
+             and "process_step" (one per step)
+
+    The original spec said "step.description" — the actual logigraph schema
+    uses `title` for the textual step label (description was never a field).
     """
     out: list[tuple[str, str]] = []
     kind = node.get("kind")
@@ -115,10 +119,13 @@ def _text_sources_for_node(node: dict) -> list[tuple[str, str]]:
         if s:
             out.append(("domain_summary", s))
     elif kind == "process":
+        s = (node.get("summary") or "").strip()
+        if s:
+            out.append(("process_summary", s))
         for step in node.get("steps") or []:
-            d = (step.get("description") or "").strip()
-            if d:
-                out.append(("process_step", d))
+            t = (step.get("title") or "").strip()
+            if t:
+                out.append(("process_step", t))
     return out
 
 
