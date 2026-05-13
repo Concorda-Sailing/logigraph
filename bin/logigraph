@@ -34,6 +34,11 @@ from pathlib import Path
 # Schemas + lib/ travel with the tool framework, not the per-project data.
 TOOL_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_ROOT))
+
+# Reconcile imports fastembed via the sibling depgraph repo's venv. Route
+# subprocess calls there too — bare "python3" misses the wheel.
+_DEPGRAPH_VENV = TOOL_ROOT.parent / "depgraph" / ".venv" / "bin" / "python3"
+FRAMEWORK_PYTHON = str(_DEPGRAPH_VENV) if _DEPGRAPH_VENV.exists() else "python3"
 from lib.config import (  # noqa: E402
     resolve_data_dir,
     load_project_config,
@@ -181,7 +186,7 @@ def mark_regen_in_progress() -> None:
 
 def cmd_regen(args: argparse.Namespace) -> int:
     mark_regen_in_progress()
-    rc = subprocess.call(["python3", str(TOOL_ROOT / "extractors" / "reconcile.py")])
+    rc = subprocess.call([FRAMEWORK_PYTHON, str(TOOL_ROOT / "extractors" / "reconcile.py")])
     return 0 if rc == 0 else 1
 
 
