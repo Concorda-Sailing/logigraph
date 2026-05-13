@@ -565,6 +565,19 @@ def _domain_dossier_path(domain_id: str) -> Path:
     return LOGIGRAPH / "dossiers" / "domain" / f"{parts[0]}__{parts[1]}__{parts[2]}.md"
 
 
+def _process_node_path(process_id: str) -> Path:
+    """process::<category>::<short_name> → nodes/processes/<category>__<short_name>.json"""
+    parts = process_id.split("::")
+    if len(parts) != 3 or parts[0] != "process":
+        raise ValueError(f"not a valid process id: {process_id}")
+    return LOGIGRAPH / "nodes" / "processes" / f"{parts[1]}__{parts[2]}.json"
+
+
+def _process_dossier_path(process_id: str) -> Path:
+    parts = process_id.split("::")
+    return LOGIGRAPH / "dossiers" / "processes" / f"{parts[1]}__{parts[2]}.md"
+
+
 def cmd_rule_rank(args: argparse.Namespace) -> int:
     """List rule nodes ranked by definition_status (stub > llm_drafted > human_reviewed)
     then by claim count desc. Useful for picking the next rule to author."""
