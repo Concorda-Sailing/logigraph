@@ -6,6 +6,8 @@ Subcommands:
   regen                       Run extractors and reconcile (build indexes,
                               validate claims, refresh remote_hash).
   context <file-or-id>        Print the same block PreToolUse would inject.
+  flag <id> --reason "..."    Set flagged=true on a node; commits.
+  unflag <id>                 Clear flagged; commits.
   validate                    JSON-Schema check + dossier section check.
   rules-for <depgraph-id>     List rules that claim a depgraph node.
   fan-out [--threshold N]     Rank rules by claim count (refactor signal).
@@ -1071,6 +1073,102 @@ def cmd_process_bump(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_node_path(node_id: str) -> Path | None:
+    """Resolve a logigraph node id to its JSON path. Supports rule / domain
+    (resource, role, attribute, relationship) / process prefixes."""
+    if node_id.startswith("rule::"):
+        try:
+            return _rule_node_path(node_id)
+        except ValueError:
+            return None
+    if any(node_id.startswith(p + "::") for p in _DOMAIN_PREFIXES):
+        try:
+            return _domain_node_path(node_id)
+        except ValueError:
+            return None
+    if node_id.startswith("process::"):
+        try:
+            return _process_node_path(node_id)
+        except ValueError:
+            return None
+    return None
+
+
+def _git_commit_if_changed(data_dir: Path, paths: list[Path], message: str) -> bool:
+    """Stage given paths and commit if there's a diff. Returns True iff a
+    commit was made."""
+    rel = [str(p.relative_to(data_dir)) for p in paths]
+    subprocess.run(["git", "-C", str(data_dir), "add", *rel], check=True)
+    diff = subprocess.run(
+        ["git", "-C", str(data_dir), "diff", "--cached", "--name-only"],
+        capture_output=True, text=True,
+    )
+    if not diff.stdout.strip():
+        return False
+    subprocess.run(["git", "-C", str(data_dir), "commit", "-q", "-m", message], check=True)
+    return True
+
+
+def _default_actor() -> str:
+    r = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True)
+    if r.returncode == 0 and r.stdout.strip():
+        return r.stdout.strip()
+    return os.environ.get("USER", "unknown")
+
+
+def cmd_flag(args: argparse.Namespace) -> int:
+    """Set flagged=true on a logigraph node. Writes flagged_by + flagged_at
+    (and flagged_reason if --reason given) to the node JSON and commits.
+    Idempotent: if already flagged with same actor+reason, exit 0 without
+    committing."""
+    import datetime as _dt
+    node_path = _resolve_node_path(args.id)
+    if node_path is None or not node_path.exists():
+        print(f"no logigraph node with id: {args.id}", file=sys.stderr)
+        return 1
+    node = json.loads(node_path.read_text())
+    actor = args.actor or _default_actor()
+    today = _dt.date.today().isoformat()
+    if (node.get("flagged") and node.get("flagged_by") == actor
+            and node.get("flagged_reason") == args.reason):
+        print(f"already flagged by {actor} with same reason — no change")
+        return 0
+    node["flagged"] = True
+    node["flagged_by"] = actor
+    node["flagged_at"] = today
+    if args.reason:
+        node["flagged_reason"] = args.reason
+    else:
+        node.pop("flagged_reason", None)
+    node_path.write_text(json.dumps(node, indent=2) + "\n")
+    msg = f"flag: {args.id}"
+    if args.reason:
+        msg += f"\n\n{args.reason}"
+    _git_commit_if_changed(LOGIGRAPH, [node_path], msg)
+    print(f"flagged {args.id} by {actor}")
+    return 0
+
+
+def cmd_unflag(args: argparse.Namespace) -> int:
+    """Clear flagged + flagged_by + flagged_at + flagged_reason and commit.
+    Idempotent: if not flagged, exit 0 without committing."""
+    node_path = _resolve_node_path(args.id)
+    if node_path is None or not node_path.exists():
+        print(f"no logigraph node with id: {args.id}", file=sys.stderr)
+        return 1
+    node = json.loads(node_path.read_text())
+    if not node.get("flagged"):
+        print(f"{args.id} is not flagged — no change")
+        return 0
+    for key in ("flagged", "flagged_by", "flagged_at", "flagged_reason"):
+        node.pop(key, None)
+    node_path.write_text(json.dumps(node, indent=2) + "\n")
+    actor = args.actor or _default_actor()
+    _git_commit_if_changed(LOGIGRAPH, [node_path], f"unflag: {args.id}")
+    print(f"unflagged {args.id} by {actor}")
+    return 0
+
+
 def cmd_self_check(args: argparse.Namespace) -> int:
     """Smoke-test the PreToolUse hook end-to-end.
 
@@ -1231,6 +1329,17 @@ def main() -> int:
     p_rollup.add_argument("--direct-only", action="store_true", help="Equivalent to --depth 1")
     p_rollup.add_argument("--format", choices=["text", "json"], default="text")
     p_rollup.set_defaults(func=cmd_rollup)
+
+    p_flag = sub.add_parser("flag", help="Set flagged=true on a node")
+    p_flag.add_argument("id", help="Logigraph node id (rule::*, resource::*, role::*, attribute::*, relationship::*, process::*)")
+    p_flag.add_argument("--reason", default=None, help="One-line reason (recorded in commit message and JSON)")
+    p_flag.add_argument("--actor", default=None, help="Actor name (default: git config user.name)")
+    p_flag.set_defaults(func=cmd_flag)
+
+    p_unflag = sub.add_parser("unflag", help="Clear flagged from a node")
+    p_unflag.add_argument("id", help="Logigraph node id")
+    p_unflag.add_argument("--actor", default=None, help="Actor name (default: git config user.name)")
+    p_unflag.set_defaults(func=cmd_unflag)
 
     args = parser.parse_args()
 
