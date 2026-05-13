@@ -37,6 +37,26 @@ from lib.config import (  # noqa: E402
     path_to_repo_relative,
 )
 
+# Rollup computation is shared with depgraph; import from the sibling
+# repo. Mirrors how this script already adds TOOL_ROOT to sys.path for
+# its own lib/.
+#
+# `from lib.config import` above already anchors the `lib` package to
+# logigraph's lib/ directory. A plain sys.path.insert won't help — the
+# package cache is already set. We extend lib.__path__ instead so that
+# Python searches depgraph's lib/ for sub-modules too.
+import lib as _lib_pkg  # noqa: E402  (already imported above; this binds the name)
+_DEPGRAPH_ROOT = TOOL_ROOT.parent / "depgraph"
+_lib_pkg.__path__.append(str(_DEPGRAPH_ROOT / "lib"))
+from lib.rollup import (  # noqa: E402
+    compute_rollup,
+    format_rollup_text,
+    format_rollup_json,
+    load_rollup_inputs,
+    resolve_anchor,
+    Rollup,
+)
+
 LOGIGRAPH = resolve_data_dir("LOGIGRAPH_DATA_DIR")
 
 
