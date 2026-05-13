@@ -906,6 +906,57 @@ def cmd_domain_bump(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_process_bump(args: argparse.Namespace) -> int:
+    """Promote a process node's definition_status (default: → human_reviewed).
+    Updates both the JSON node and the dossier frontmatter.
+    Mirrors cmd_domain_bump exactly — keep the two in sync."""
+    process_id = args.id
+    try:
+        node_path = _process_node_path(process_id)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    if not node_path.exists():
+        print(f"no process node: {node_path.relative_to(LOGIGRAPH)}", file=sys.stderr)
+        return 1
+    node = json.loads(node_path.read_text())
+    new_status = args.status
+    node["definition_status"] = new_status
+    node_path.write_text(json.dumps(node, indent=2) + "\n")
+    print(f"bumped {node_path.relative_to(LOGIGRAPH)} → definition_status: {new_status}")
+
+    dossier_path = _process_dossier_path(process_id)
+    if dossier_path.exists():
+        text = dossier_path.read_text()
+        if text.startswith("---"):
+            end = text.index("\n---\n", 4)
+            fm = text[4:end]
+            body = text[end + 5:]
+            import datetime as _dt
+            today = _dt.date.today().isoformat()
+            new_lines = []
+            seen_status = seen_reviewed = seen_hash = False
+            for line in fm.splitlines():
+                s = line.strip()
+                if s.startswith("definition_status:"):
+                    new_lines.append(f"definition_status: {new_status}")
+                    seen_status = True
+                elif s.startswith("last_reviewed:"):
+                    new_lines.append(f"last_reviewed: {today}")
+                    seen_reviewed = True
+                elif s.startswith("last_reviewed_against_hash:"):
+                    new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
+                    seen_hash = True
+                else:
+                    new_lines.append(line)
+            if not seen_status: new_lines.append(f"definition_status: {new_status}")
+            if not seen_reviewed: new_lines.append(f"last_reviewed: {today}")
+            if not seen_hash: new_lines.append(f"last_reviewed_against_hash: {node.get('structural_hash')}")
+            dossier_path.write_text("---\n" + "\n".join(new_lines).strip("\n") + "\n---\n" + body)
+            print(f"updated {dossier_path.relative_to(LOGIGRAPH)} frontmatter")
+    return 0
+
+
 def cmd_self_check(args: argparse.Namespace) -> int:
     """Smoke-test the PreToolUse hook end-to-end.
 
@@ -1053,6 +1104,11 @@ def main() -> int:
     p_db.add_argument("id")
     p_db.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
     p_db.set_defaults(func=cmd_domain_bump)
+
+    p_pb = sub.add_parser("process-bump", help="Promote a process node's definition_status (default → human_reviewed)")
+    p_pb.add_argument("id")
+    p_pb.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
+    p_pb.set_defaults(func=cmd_process_bump)
 
     args = parser.parse_args()
     return args.func(args)
