@@ -11,6 +11,9 @@ Subcommands:
   fan-out [--threshold N]     Rank rules by claim count (refactor signal).
   gaps                        Orphan rules / orphan domain refs / stale
                               claims.
+  rollup <entity-id>          Full code rollup for a domain entity.
+                              Flags: --kind, --depth, --direct-only,
+                              --format text|json.
   dossiers --status           [Backwards-compat alias for `stats`.]
   stats [--telemetry]         Curation backlog + optional injection metrics.
   self-check                  Smoke-test the hook with a fake payload.
@@ -538,6 +541,47 @@ def cmd_context(args: argparse.Namespace) -> int:
         else:
             print("_no dossier_")
         print()
+    return 0
+
+
+def cmd_rollup(args: argparse.Namespace) -> int:
+    """Emit the full code rollup for a logigraph domain entity.
+
+    Resolves the entity's anchor model in depgraph, then BFS over the
+    reverse-dependents index to gather every code symbol that operates
+    on the entity. Output respects --kind / --depth / --format flags."""
+    depgraph_dir = _depgraph_dir()
+    inputs = load_rollup_inputs(depgraph_dir)
+
+    nodes = load_all_nodes()  # logigraph nodes — { id: (path, data) }
+    if args.entity_id not in nodes:
+        print(f"no logigraph node with id: {args.entity_id}", file=sys.stderr)
+        return 1
+    _, domain_node = nodes[args.entity_id]
+    logigraph_index = {nid: data for nid, (_, data) in nodes.items()}
+
+    anchor = resolve_anchor(domain_node, inputs.depgraph_index, logigraph_index=logigraph_index)
+    rollup = compute_rollup(
+        anchor_id=anchor.model_id or "",
+        depgraph_index=inputs.depgraph_index,
+        dependents_index=inputs.dependents_index,
+        depth=args.depth,
+        anchor_result=anchor,
+    )
+
+    # --kind filter (post-compute so via-chains stay coherent).
+    if args.kind:
+        wanted = set(args.kind.split(","))
+        rollup = Rollup(
+            anchor=rollup.anchor,
+            by_kind={k: v for k, v in rollup.by_kind.items() if k in wanted},
+            total=sum(len(v) for k, v in rollup.by_kind.items() if k in wanted),
+        )
+
+    if args.format == "json":
+        print(json.dumps(format_rollup_json(rollup), indent=2))
+    else:
+        print(format_rollup_text(rollup, summary=False))
     return 0
 
 
@@ -1130,7 +1174,19 @@ def main() -> int:
     p_pb.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
     p_pb.set_defaults(func=cmd_process_bump)
 
+    p_rollup = sub.add_parser("rollup", help="Emit code rollup for a domain entity")
+    p_rollup.add_argument("entity_id", help="Logigraph domain node id (e.g. resource::concorda::boat_crew)")
+    p_rollup.add_argument("--kind", default=None, help="Comma-separated kinds (model,service,endpoint,component,test,hook,schema)")
+    p_rollup.add_argument("--depth", type=int, default=3, choices=[1, 2, 3], help="BFS depth (1=direct only)")
+    p_rollup.add_argument("--direct-only", action="store_true", help="Equivalent to --depth 1")
+    p_rollup.add_argument("--format", choices=["text", "json"], default="text")
+    p_rollup.set_defaults(func=cmd_rollup)
+
     args = parser.parse_args()
+
+    if getattr(args, "direct_only", False):
+        args.depth = 1
+
     return args.func(args)
 
 
