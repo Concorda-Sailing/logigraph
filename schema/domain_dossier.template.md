@@ -1,14 +1,14 @@
 ---
-node_id: <role::category::name>
+node_id: <domain::subkind::name>
 node_kind: domain
-subkind: role
+subkind: <role|resource|relationship|attribute>
 definition_status: stub
 last_reviewed: <YYYY-MM-DD>
 last_reviewed_against_hash: <node structural_hash>
 ---
 
 <!--
-TEMPLATE — Domain dossier (role subkind).
+TEMPLATE — Domain dossier.
 
 Quality bar: written for the LLM collaborator first. Use enumerated lists,
 concrete predicates, and short sentences. A non-engineer being able to
@@ -16,67 +16,88 @@ read this is a useful proxy for prose clarity, not the calibration
 target.
 
 Required sections (validated by `bin/logigraph validate`):
-  - ## Plain definition
-  - ## They can
-  - ## They cannot
-  - ## Becomes one when
-  - ## Stops being one when
+  - ## The thing
+  - ## Why it exists
   - ## Examples
-  - ## Technical anchor
+  - ## Counter-examples
+  - ## Decision table
+  - ## Edge cases
+  - ## Surfaces
+  - ## Open questions
 
-Resource / action / attribute subkinds use different templates (TBD in
-Phase 1). For now, this template covers role::system::* and
-role::relational::* nodes.
+The first section heading differs by subkind but the body structure is
+the same. For role subkinds, the paragraph under `## The thing` describes
+who holds this role and by what predicate. For resource subkinds, it
+describes the entity and its identity tuple. For relationship and
+attribute subkinds, it describes the pairing or the field.
+
+The Decision table is mandatory: enumerate the realistic boundary
+conditions and the domain concept's verdict on each (e.g. "does this
+predicate qualify someone as an X?"). Narrative examples + counter-examples
+support prose clarity but don't substitute for an enumerated table.
 -->
 
-# <Role Title>
+# <Domain concept title>
 
-## Plain definition
+## The thing
 
-<One-paragraph plain-English description. Who is this role? What is the
-shape of the relationship? E.g. "A Boat Owner is the person whose boat
-it is. They registered the boat or were promoted to co-owner. Multiple
-owners are allowed; they have equal authority.">
+<Single paragraph: what is this concept? For a role: who is this person and
+what predicate qualifies them? For a resource: what row/entity does this name?
+What is its identity key? For a relationship: what two nodes does it connect,
+and under what conditions? For an attribute: what field, what type, and what
+does it control?>
 
-## They can
+## Why it exists
 
-- <Capability 1, in plain terms.>
-- <Capability 2.>
-- <Capability 3.>
-
-## They cannot
-
-- <Limit 1.>
-- <Limit 2.>
-
-## Becomes one when
-
-- <Predicate that flips this on, in plain terms.>
-- <Alternate path if any.>
-
-## Stops being one when
-
-- <Predicate that flips this off.>
-- <Edge case (e.g. "the boat is deleted").>
+<Rationale. What real-world fact, design constraint, or business decision
+motivated separating this into its own node? Why is it a first-class concept
+rather than an implementation detail or a property of another node? This is the
+section that lets the LLM judge whether a proposed refactor preserves intent.>
 
 ## Examples
 
-- <Concrete sailor-named example. Use seed personas (Alice, Bob, Carol)
-  where helpful.>
-- <Second example covering a different path to the role.>
+- <Concrete positive case 1: who/what qualifies, and why.>
+- <Concrete positive case 2 covering a different path.>
+- <Concrete positive case 3 covering a different angle.>
 
-## Distinctions
+## Counter-examples (what this is NOT)
 
-<Optional. How is this concept different from adjacent concepts the LLM
-might confuse it with? E.g. "Co-owner is not the same as a Crew Member
-with admin permissions — Co-owner has equal authority via the
-unanimous-approval promotion process; Crew Member is non-authoritative
-regardless of permission bits.">
+- <Adjacent concept 1 that could be confused with this: how it differs.>
+- <Misconception 2: this concept does **not** ___.>
 
-## Technical anchor
+## Decision table
 
-- **Predicate**: `<SQL-ish or set-builder predicate>`
-- **Defined in**: `<repo/file.py>` (system roles only)
-- **Enforced by**: `<canonical helper / chokepoint>`
-- **Related rules**: see `_index/by_domain.json` for rules that
-  reference this node.
+<Required. Enumerate the realistic boundary conditions and the verdict
+on each (e.g. "does this predicate hold?", "is this resource visible?",
+"is this relationship active?"). Use Markdown tables.>
+
+| <Condition 1> | <Condition 2> | <...> | Outcome |
+|---------------|---------------|-------|---------|
+| <value>       | <value>       | <...> | <verdict> |
+| <value>       | <value>       | <...> | <verdict> |
+
+<Optional notes after the table: known inconsistencies, legacy paths,
+future-state intent.>
+
+## Edge cases
+
+- <Subtlety not captured in the table.>
+- <Interaction with another domain concept or rule.>
+- <Lifecycle edge: what happens when a parent resource is deleted?
+  What happens during a role transition?>
+
+## Surfaces
+
+<Where does this concept live in code? Which models, helpers, or
+chokepoints are the canonical source of truth? The structured form
+is `claims_code` on the node JSON, with current line ranges. This
+section explains the *shape*: which surfaces enforce, which display,
+which emit, which only check.>
+
+- Backend: <description>
+- Frontend: <description>
+- Mobile / other: <description, if any>
+
+## Open questions
+
+- <Unresolved design or implementation question, if any.>
