@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "rule::example::test",
+  "kind": "rule",
+  "title": "Example rule",
+  "statement": "An example rule statement long enough to embed meaningfully and to round-trip through chunking + indexing without losing the structural shape.",
+  "claims_code": [],
+  "references_domain": [],
+  "structural_hash": "rh1",
+  "definition_status": "human_reviewed"
+}

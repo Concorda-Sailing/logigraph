@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "id": "resource::example::entity",
+  "kind": "domain",
+  "subkind": "resource",
+  "title": "Example entity",
+  "summary": "An example resource describing a kind of thing in the system. Used for testing the embedding pipeline against the domain corpus.",
+  "structural_hash": "dh1",
+  "definition_status": "human_reviewed"
+}

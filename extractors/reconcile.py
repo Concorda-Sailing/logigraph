@@ -33,6 +33,7 @@ Manifests for domain extractors will come in Phase 1
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -41,7 +42,23 @@ from pathlib import Path
 
 TOOL_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_ROOT))
+
+# Also expose depgraph's lib/ so lib.chunker / lib.embeddings are importable.
+_DEPGRAPH_ROOT = TOOL_ROOT.parent / "depgraph"
+if str(_DEPGRAPH_ROOT) not in sys.path:
+    sys.path.insert(0, str(_DEPGRAPH_ROOT))
+
 from lib.config import resolve_data_dir, primary_repo_path, load_project_config  # noqa: E402
+
+# Embedding libs live in depgraph's lib/. ImportError → "skipped" status.
+try:
+    from lib.chunker import chunk_text
+    from lib.embeddings import (
+        EmbeddingUnavailable, embed_chunks, read_index, write_index,
+    )
+    _EMBEDDING_AVAILABLE = True
+except ImportError:
+    _EMBEDDING_AVAILABLE = False
 
 LOGIGRAPH = resolve_data_dir("LOGIGRAPH_DATA_DIR")
 
@@ -74,6 +91,112 @@ BY_DOMAIN_INDEX = INDEX_DIR / "by_domain.json"
 CORPUS_META = NODES / "_meta.json"
 INDEX_SCHEMA_VERSION = 1
 META_SCHEMA_VERSION = 1
+
+
+def _chunk_hash(text: str) -> str:
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _text_sources_for_node(node: dict) -> list[tuple[str, str]]:
+    """Return [(source_field, text), ...] for the prose sources on a node.
+
+    Rule:    statement        → source_field "rule_statement"
+    Domain:  summary          → source_field "domain_summary"
+    Process: each step.description → source_field "process_step" (one per step)
+    """
+    out: list[tuple[str, str]] = []
+    kind = node.get("kind")
+    if kind == "rule":
+        s = (node.get("statement") or "").strip()
+        if s:
+            out.append(("rule_statement", s))
+    elif kind == "domain":
+        s = (node.get("summary") or "").strip()
+        if s:
+            out.append(("domain_summary", s))
+    elif kind == "process":
+        for step in node.get("steps") or []:
+            d = (step.get("description") or "").strip()
+            if d:
+                out.append(("process_step", d))
+    return out
+
+
+def _run_embedding_pass(nodes: list[dict], data_dir: Path) -> str:
+    """Embed rule.statement, domain.summary, and each process step.description.
+
+    Returns "ok" | "failed" | "skipped":
+      - "skipped" if fastembed / numpy aren't importable
+      - "failed"  if embed_chunks raises EmbeddingUnavailable mid-run
+      - "ok"      on success
+
+    Incremental by sha256(chunk text). Block-only failure semantics — never
+    raises out to reconcile's main().
+    """
+    if not _EMBEDDING_AVAILABLE:
+        return "skipped"
+    import numpy as np
+
+    index_dir = data_dir / "nodes" / "_index"
+    bin_path = index_dir / "embeddings.bin"
+    jsonl_path = index_dir / "embeddings.jsonl"
+    prior_rows, prior_vecs = read_index(bin_path, jsonl_path)
+    prior_by_hash = {r["content_hash"]: (r, prior_vecs[r["row"]])
+                     for r in prior_rows if "content_hash" in r}
+
+    new_rows: list[dict] = []
+    chunks_to_embed: list[str] = []
+
+    for n in nodes:
+        for source_field, text in _text_sources_for_node(n):
+            chunks = chunk_text(text)
+            for i, ch in enumerate(chunks):
+                h = _chunk_hash(ch)
+                meta = {
+                    "node_id": n.get("id"),
+                    "chunk_index": i,
+                    "content_hash": h,
+                    "text_preview": ch[:120].replace("\n", " "),
+                    "source_field": source_field,
+                }
+                new_rows.append(meta)
+                if h not in prior_by_hash:
+                    chunks_to_embed.append(ch)
+
+    try:
+        new_vecs = embed_chunks(chunks_to_embed)
+    except EmbeddingUnavailable:
+        return "failed"
+
+    vecs = np.zeros((len(new_rows), 384), dtype=np.float16)
+    fresh_idx = 0
+    for i, meta in enumerate(new_rows):
+        meta["row"] = i
+        h = meta["content_hash"]
+        if h in prior_by_hash:
+            vecs[i] = prior_by_hash[h][1]
+        else:
+            vecs[i] = new_vecs[fresh_idx]
+            fresh_idx += 1
+
+    write_index(bin_path, jsonl_path, vecs, new_rows)
+    return "ok"
+
+
+def _write_embedding_status(data_dir: Path, status: str) -> None:
+    """Stamp _meta.json::embedding_status without disturbing other keys."""
+    meta_path = data_dir / "nodes" / "_meta.json"
+    if not meta_path.exists():
+        return
+    try:
+        meta = json.loads(meta_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    meta["embedding_status"] = status
+    try:
+        meta_path.write_text(json.dumps(meta, indent=2) + "\n")
+    except OSError:
+        pass
 
 
 def _is_node_file(path: Path) -> bool:
@@ -562,6 +685,13 @@ def main() -> int:
         print(f"  ⚠ `{mech}` mediates {len(ids)} distinct relationships:")
         for rid in ids:
             print(f"      - {rid}")
+
+    # Embedding pass — block-only failure semantics.
+    if not args.report_only:
+        node_list = [data for _, data in nodes.values()]
+        embedding_status = _run_embedding_pass(node_list, LOGIGRAPH)
+        _write_embedding_status(LOGIGRAPH, embedding_status)
+        print(f"embeddings:       {embedding_status}")
 
     if args.strict and (orphan_claims or orphan_domain):
         return 1

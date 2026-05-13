@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "process::example::flow",
+  "kind": "process",
+  "title": "Example flow",
+  "flow": {"action": "user opens example"},
+  "steps": [
+    {"description": "User does the first step — example prose for the embedding pipeline to chew on.", "claims_code": []},
+    {"description": "Then the second step happens, with enough detail to make it a real embedding target.", "claims_code": []}
+  ],
+  "structural_hash": "ph1",
+  "definition_status": "human_reviewed"
+}

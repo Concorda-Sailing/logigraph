@@ -1,0 +1,5 @@
+[project]
+name = "embed-fixture-lg"
+
+[depgraph]
+data_dir = "/tmp/embed-fixture-depgraph"
