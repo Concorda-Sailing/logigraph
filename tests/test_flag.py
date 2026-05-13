@@ -115,3 +115,37 @@ def test_flag_unknown_id_exits_1(tmp_path: Path):
     r = _run(["flag", "rule::test::no_such", "--reason", "x"], data)
     assert r.returncode == 1
     assert "no" in r.stderr.lower()
+
+
+def test_context_emits_flagged_marker_for_flagged_rule(tmp_path):
+    """Run context on a file claimed by a flagged rule; output should include
+    the FLAGGED marker block before the rule's regular content."""
+    data = _make_fixture(tmp_path)
+    # Build a rule that claims a fake depgraph id so find_rules_for_target matches.
+    nodes = data / "nodes" / "rules"
+    rule = json.loads((nodes / "test__sample.json").read_text())
+    rule["claims_code"] = [{
+        "depgraph_id": "test-api::models/foo.py::Foo",
+        "role": "enforces",
+        "where": "foo.py",
+        "confidence": "high",
+    }]
+    (nodes / "test__sample.json").write_text(json.dumps(rule, indent=2) + "\n")
+    # Build the rules-index so find_rules_for_target works.
+    (data / "nodes" / "_index" / "by_code.json").write_text(json.dumps({
+        "schema_version": 1,
+        "by_target": {"test-api::models/foo.py::Foo": ["rule::test::sample"]},
+    }))
+    # Re-commit so the index is in the tree (not strictly required, but keeps the working tree clean).
+    subprocess.run(["git", "-C", str(data), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(data), "commit", "-q", "-m", "add by_code index"], check=True)
+
+    # Flag the rule.
+    _run(["flag", "rule::test::sample", "--reason", "perf issue, not a contract", "--actor", "logan"], data)
+
+    # Now invoke context on the depgraph id (find_rules_for_target accepts node ids too).
+    r = _run(["context", "test-api::models/foo.py::Foo"], data)
+    assert r.returncode == 0, r.stderr
+    assert "⚠ FLAGGED" in r.stdout
+    assert "perf issue, not a contract" in r.stdout
+    assert "documents a known deficiency" in r.stdout.lower()

@@ -496,9 +496,19 @@ def repo_relative(abs_path: str) -> tuple[str, str] | None:
 def find_rules_for_target(target: str) -> list[str]:
     """If target looks like a file path, return rule_ids that claim any
     depgraph node living in that file. If target looks like a node id
-    (rule:: or domain subkind prefix), return [target] verbatim."""
+    (rule:: or domain subkind prefix), return [target] verbatim. If target
+    looks like a depgraph node id (contains '::' but is not a domain subkind
+    prefix), look it up in the by_code index."""
     if target.startswith(("rule::", "role::", "resource::", "action::", "attribute::")):
         return [target]
+    # Depgraph node IDs contain '::' (e.g. "concorda-api::models/foo.py::Foo").
+    # Look them up via the by_code index rather than by_file.
+    if "::" in target:
+        if not BY_CODE_INDEX.exists():
+            print("by_code index not built — run `bin/logigraph regen`", file=sys.stderr)
+            return []
+        idx = json.loads(BY_CODE_INDEX.read_text())
+        return idx.get("by_target", {}).get(target, [])
     if not BY_FILE_INDEX.exists():
         print("by_file index not built — run `bin/logigraph regen`", file=sys.stderr)
         return []
@@ -539,6 +549,20 @@ def cmd_context(args: argparse.Namespace) -> int:
             print(f"WARN: index points to missing rule {rid}", file=sys.stderr)
             continue
         path, data = nodes[rid]
+        if data.get("flagged"):
+            reason = data.get("flagged_reason") or "(no reason recorded)"
+            flagger = data.get("flagged_by") or "(unknown)"
+            flag_date = data.get("flagged_at") or ""
+            print("⚠ FLAGGED — this rule documents a known deficiency, not an invariant to preserve.")
+            meta = f"  Flagged by: {flagger}"
+            if flag_date:
+                meta += f" · {flag_date}"
+            print(meta)
+            print(f"  Reason: {reason}")
+            print("  When touching affected code: surface alternatives; do NOT pattern-match")
+            print("  the current state as desired. The rule's claims describe what exists,")
+            print("  not what should exist.")
+            print()
         print(f"# {data.get('title', rid)}")
         print(f"id: {rid}  ·  fan_out: {data.get('fan_out') or len(data.get('claims_code') or [])}")
         print(f"statement: {data.get('statement', '')}")
