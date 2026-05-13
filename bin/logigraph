@@ -503,9 +503,21 @@ def find_rules_for_target(target: str) -> list[str]:
     idx = json.loads(BY_FILE_INDEX.read_text())
     rr = repo_relative(target)
     if not rr:
-        # try treating as repo-relative directly against each configured repo
-        for info in project_repos(LOGIGRAPH).values():
-            if (info["path"] / target).exists():
+        # Try treating as repo-relative — two forms accepted:
+        #   (a) bare relative:   "models/event.py"  → check info["path"] / target
+        #   (b) basename-prefix: "concorda-api/models/event.py"
+        #       → strip the first component when it matches a known basename
+        repos = project_repos(LOGIGRAPH)
+        for info in repos.values():
+            basename = info["basename"]
+            # Form (b): target already has the basename prefix — strip it.
+            if target.startswith(f"{basename}/"):
+                rel = target[len(basename) + 1:]
+                if (info["path"] / rel).exists():
+                    rr = (basename, rel)
+                    break
+            # Form (a): bare relative path under this repo.
+            elif (info["path"] / target).exists():
                 rr = (info["basename"], target)
                 break
     if not rr:
@@ -541,6 +553,44 @@ def cmd_context(args: argparse.Namespace) -> int:
         else:
             print("_no dossier_")
         print()
+
+    # --- Entity rollups -------------------------------------------------------
+    # Collect the union of domain refs across the applicable rules; emit a
+    # rollup summary block per entity. Spec § "CLI surface / context": inline
+    # by default, summary mode (top 3 per kind).
+    entity_ids: list[str] = []
+    seen_entity: set[str] = set()
+    for rid in rule_ids:
+        if rid not in nodes:
+            continue
+        _, rdata = nodes[rid]
+        for ref in rdata.get("references_domain", []):
+            if ref not in seen_entity and ref in nodes:
+                entity_ids.append(ref)
+                seen_entity.add(ref)
+
+    if entity_ids:
+        try:
+            inputs = load_rollup_inputs(_depgraph_dir())
+        except FileNotFoundError as e:
+            # Reverse-dependents index missing — surface once, then skip.
+            print(f"# (rollups skipped: {e})")
+            return 0
+        logigraph_index = {nid: data for nid, (_, data) in nodes.items()}
+        for eid in entity_ids:
+            _, edata = nodes[eid]
+            anchor = resolve_anchor(edata, inputs.depgraph_index, logigraph_index=logigraph_index)
+            rollup = compute_rollup(
+                anchor_id=anchor.model_id or "",
+                depgraph_index=inputs.depgraph_index,
+                dependents_index=inputs.dependents_index,
+                depth=3,
+                anchor_result=anchor,
+            )
+            print(f"─ Rollup for {eid}")
+            print(format_rollup_text(rollup, summary=True))
+            print()
+
     return 0
 
 
