@@ -86,15 +86,30 @@ def test_process_bump_explicit_status(temp_corpus: Path):
     assert result.returncode == 0, result.stderr
     node = json.loads((temp_corpus / "nodes" / "processes" / "testing__sample_proc.json").read_text())
     assert node["definition_status"] == "llm_drafted"
+    dossier = (temp_corpus / "dossiers" / "processes" / "testing__sample_proc.md").read_text()
+    assert "definition_status: llm_drafted" in dossier
+
+
+def test_process_bump_no_dossier_still_succeeds(temp_corpus: Path):
+    """If the dossier file is missing, the JSON bump still succeeds — the
+    dossier rewrite is guarded by `if dossier_path.exists():`."""
+    dossier = temp_corpus / "dossiers" / "processes" / "testing__sample_proc.md"
+    dossier.unlink()
+    result = _run_cli(temp_corpus, "process-bump", "process::testing::sample_proc")
+    assert result.returncode == 0, result.stderr
+    node = json.loads((temp_corpus / "nodes" / "processes" / "testing__sample_proc.json").read_text())
+    assert node["definition_status"] == "human_reviewed"
+    # No "updated ... frontmatter" line in stdout when dossier was missing
+    assert "frontmatter" not in result.stdout
 
 
 def test_process_bump_unknown_id_errors(temp_corpus: Path):
     result = _run_cli(temp_corpus, "process-bump", "process::testing::nonexistent")
-    assert result.returncode != 0
+    assert result.returncode == 1
     assert "no process node" in result.stderr
 
 
 def test_process_bump_rejects_bad_id_shape(temp_corpus: Path):
     result = _run_cli(temp_corpus, "process-bump", "rule::testing::wrongkind")
-    assert result.returncode != 0
+    assert result.returncode == 1
     assert "not a valid process id" in result.stderr
