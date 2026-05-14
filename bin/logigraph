@@ -1202,6 +1202,112 @@ def cmd_process_rank(args: argparse.Namespace) -> int:
             "fan_out": len(endpoints),
         })
 
+    # --- Signal F — UI-initiated flow: pages and hooks --------------------
+    # A real Concorda flow usually starts at a button (component in
+    # src/app/**/page.tsx) or at a reusable hook (kind=hook in src/hooks/).
+    # Walk forward from each candidate entry point; require it to reach
+    # both an endpoint AND a model for the flow to be "complete."
+    for nid, dgn in dg_corpus.items():
+        kind = dgn.get("kind")
+        src = dgn.get("source") or {}
+        path = src.get("path") or ""
+
+        # Classify entry type
+        is_page = kind == "component" and path.endswith("/page.tsx")
+        is_hook = kind == "hook"
+
+        if not (is_page or is_hook):
+            continue
+        if nid in covered:
+            continue
+
+        reach_map = _bfs_forward(nid, max_depth=4)
+        if not reach_map:
+            continue
+
+        endpoints_reached = {r for r in reach_map if r in dg_corpus and dg_corpus[r].get("kind") == "endpoint"}
+        models_reached = {r for r in reach_map if r in dg_corpus and dg_corpus[r].get("kind") == "model"}
+
+        if not endpoints_reached or not models_reached:
+            continue
+
+        # Confidence: page > hook (pages are unambiguous user actions; hooks
+        # may be shared utilities). Bump by depth-1 closeness (the more
+        # direct the reach to the endpoint, the cleaner the flow shape).
+        min_endpoint_depth = min(reach_map.get(e, 99) for e in endpoints_reached)
+        base = 0.75 if is_page else 0.55
+        conf = min(1.0, base + 0.1 * max(0, 3 - min_endpoint_depth))
+
+        signal_name = "page_initiated_flow" if is_page else "hook_initiated_flow"
+        # Suggested name from path
+        slug = path.replace("src/", "").replace("/", "_").replace(".tsx", "").replace(".ts", "").lower()
+        category = "ui" if is_page else "hooks"
+        candidates.append({
+            "signal": signal_name,
+            "anchor": nid,
+            "confidence": conf,
+            "evidence": f"reaches {len(endpoints_reached)} endpoint(s), {len(models_reached)} model(s); nearest endpoint at depth {min_endpoint_depth}",
+            "suggested": f"process::{category}::{slug[:50]}_flow",
+            "fan_out": len(endpoints_reached) + len(models_reached),
+        })
+
+    # --- Signal G — headless flow: cron / worker / handler entry points ---
+    # A node with NO reverse-edge dependents AND non-(endpoint|component|test|hook)
+    # kind that still reaches endpoints/models via its forward graph is being
+    # entered from outside the dependency graph — i.e. a cron job, a worker
+    # function, a signal handler, a script.
+    HEADLESS_SKIP_KINDS = {"endpoint", "component", "test", "hook", "schema", "model"}
+    # Test-named paths aren't flows we want to document as processes —
+    # they're test infrastructure that ENTERS the system from outside but
+    # isn't user-facing or scheduled production work. Path-shaped hints
+    # only (no hardcoded repo basenames).
+    TEST_PATH_HINTS = ("/tests/", "tests/", ".spec.ts", ".spec.tsx", "_test.py", "test_", "/spec/")
+    # API client wrappers (lib/api.ts, lib/api-client.ts) are thin shells
+    # around an endpoint — calling them is "calling the endpoint." They
+    # reach endpoints+models but the flow lives in the endpoint.
+    API_CLIENT_PATH_HINTS = ("lib/api.ts", "lib/api-client.ts", "api_client.py", "lib/client.ts")
+    for nid, dgn in dg_corpus.items():
+        kind = dgn.get("kind")
+        if kind in HEADLESS_SKIP_KINDS:
+            continue
+        if nid in covered:
+            continue
+        # No one depends on this node — it's an entry from outside
+        if deps_idx.get(nid):
+            continue
+
+        src = dgn.get("source") or {}
+        path = src.get("path") or ""
+        repo = src.get("repo") or ""
+        # Skip test infrastructure (path-shaped hints only)
+        if any(h in path for h in TEST_PATH_HINTS):
+            continue
+        # Skip API client wrappers — the flow is the endpoint they call
+        if any(h in path for h in API_CLIENT_PATH_HINTS):
+            continue
+
+        reach_map = _bfs_forward(nid, max_depth=3)
+        if not reach_map:
+            continue
+        endpoints_reached = {r for r in reach_map if r in dg_corpus and dg_corpus[r].get("kind") == "endpoint"}
+        models_reached = {r for r in reach_map if r in dg_corpus and dg_corpus[r].get("kind") == "model"}
+        # Headless needs to TOUCH state to be a flow; needs at least one model
+        if not models_reached:
+            continue
+
+        # Suggested name from path
+        slug = path.replace("/", "_").replace(".py", "").replace(".ts", "").lower()[:50]
+        conf = min(1.0, 0.6 + 0.05 * len(models_reached) + (0.1 if endpoints_reached else 0))
+
+        candidates.append({
+            "signal": "headless_initiated_flow",
+            "anchor": nid,
+            "confidence": conf,
+            "evidence": f"no reverse deps; reaches {len(endpoints_reached)} endpoint(s), {len(models_reached)} model(s)",
+            "suggested": f"process::headless::{slug}_flow",
+            "fan_out": len(reach_map),
+        })
+
     # Sort by confidence, then fan_out, descending
     candidates.sort(key=lambda c: (-c["confidence"], -c["fan_out"]))
     if args.limit:
