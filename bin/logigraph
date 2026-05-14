@@ -185,8 +185,14 @@ def mark_regen_in_progress() -> None:
 
 
 def cmd_regen(args: argparse.Namespace) -> int:
+    """Inject LOGIGRAPH_DATA_DIR into the subprocess env so reconcile targets
+    the resolved data dir even when the user invoked regen via cwd discovery
+    rather than an explicit env var. Mirrors the same fix in depgraph; cheap
+    insurance for the day logigraph grows project-owned extractors with their
+    own path defaults."""
     mark_regen_in_progress()
-    rc = subprocess.call([FRAMEWORK_PYTHON, str(TOOL_ROOT / "extractors" / "reconcile.py")])
+    env = {**os.environ, "LOGIGRAPH_DATA_DIR": str(LOGIGRAPH)}
+    rc = subprocess.call([FRAMEWORK_PYTHON, str(TOOL_ROOT / "extractors" / "reconcile.py")], env=env)
     return 0 if rc == 0 else 1
 
 
