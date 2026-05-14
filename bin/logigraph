@@ -1101,6 +1101,107 @@ def cmd_process_rank(args: argparse.Namespace) -> int:
             "fan_out": len(dep_entries),
         })
 
+    # --- Signal C: forward-edge multi-kind reach from endpoint ----------
+    # Walk each endpoint's depends_on transitively (BFS depth 3). If the
+    # reached set spans >=3 distinct kinds OR writes >=2 distinct models,
+    # the endpoint is orchestrating something flow-shaped.
+    def _bfs_forward(start_id: str, max_depth: int = 2) -> dict[str, int]:
+        """Return {node_id: depth_first_reached}. Depth 1 = direct depends_on
+        edges from the start node. Depth 2 = one further hop. Stops at 2 by
+        default to avoid noise from transitively-shared services (auth, db,
+        utils) inflating reach counts."""
+        depth_of: dict[str, int] = {start_id: 0}
+        frontier = [start_id]
+        for d in range(1, max_depth + 1):
+            next_frontier = []
+            for nid in frontier:
+                node = dg_corpus.get(nid)
+                if not node:
+                    continue
+                for edge in node.get("depends_on") or []:
+                    tgt = edge.get("target") if isinstance(edge, dict) else None
+                    if tgt and tgt not in depth_of:
+                        depth_of[tgt] = d
+                        next_frontier.append(tgt)
+            frontier = next_frontier
+            if not frontier:
+                break
+        return {k: v for k, v in depth_of.items() if k != start_id}
+
+    # Build reverse-aggregation alongside Signal C for convergence
+    endpoints_reaching: dict[str, set[str]] = {}  # downstream_id -> {endpoint_ids}
+
+    for nid, dgn in dg_corpus.items():
+        if dgn.get("kind") != "endpoint":
+            continue
+        reached = set(_bfs_forward(nid, max_depth=2).keys())
+        # Tally for convergence signal
+        for r in reached:
+            endpoints_reaching.setdefault(r, set()).add(nid)
+        # Signal C own emit
+        if nid in covered:
+            continue
+        kinds = {dg_corpus[r].get("kind", "?") for r in reached if r in dg_corpus}
+        kinds.discard("?")
+        models = {r for r in reached if r in dg_corpus and dg_corpus[r].get("kind") == "model"}
+        if len(kinds) < 3 and len(models) < 2:
+            continue
+        # Skip pure-test or pure-component fan-out (READ endpoints typically)
+        non_trivial_kinds = kinds - {"test", "component", "schema", "route_call"}
+        if len(non_trivial_kinds) < 2:
+            continue
+        conf = min(1.0, 0.55 + 0.1 * (len(kinds) - 3) + 0.15 * max(0, len(models) - 1))
+        # Suggested name from endpoint path
+        slug = nid.split("::", 1)[1].strip("/").replace("/", "_").replace("{", "").replace("}", "") if "::" in nid else "endpoint"
+        candidates.append({
+            "signal": "endpoint_forward_reach",
+            "anchor": nid,
+            "confidence": conf,
+            "evidence": f"reaches kinds {sorted(kinds)}; writes {len(models)} model(s)",
+            "suggested": f"process::endpoints::{slug[:50]}_orchestration",
+            "fan_out": len(reached),
+        })
+
+    # --- Signal D+E (unified): convergence on shared downstream ---------
+    # Kind-weighted; only emit when >=3 endpoints converge AND the
+    # downstream node isn't itself an endpoint or already covered.
+    KIND_WEIGHT = {"model": 1.0, "hook": 0.85, "service": 0.65, "schema": 0.45}
+    for downstream_id, endpoints in endpoints_reaching.items():
+        if downstream_id in covered:
+            continue
+        n_eps = len(endpoints)
+        if n_eps < 3:
+            continue
+        # Skip hubs: nodes touched by too many endpoints aren't flow centers,
+        # they're foundational primitives (Person, Event, the auth context).
+        # Threshold tuned by inspection — anything >15 endpoints in a corpus
+        # of ~300 is reading like a hub.
+        if n_eps > 15:
+            continue
+        ds_node = dg_corpus.get(downstream_id)
+        if not ds_node:
+            continue
+        ds_kind = ds_node.get("kind", "?")
+        if ds_kind not in KIND_WEIGHT:
+            continue
+        # confidence: kind weight × concentration factor (peaks 4-7 endpoints)
+        kw = KIND_WEIGHT[ds_kind]
+        # Gaussian-ish bump centered at 5 endpoints
+        conc = 1.0 - abs(n_eps - 5) / 12.0
+        conf = min(1.0, kw * max(0.3, conc))
+        # Suggested name from downstream id
+        # e.g. concorda-api::models/event_crew.py::EventCrew → process::event_crew::lifecycle
+        suggest_slug = downstream_id.split("::")[-1].lower()
+        suggest_cat = ds_kind  # "model", "hook", etc.
+        candidates.append({
+            "signal": f"convergence_on_{ds_kind}",
+            "anchor": downstream_id,
+            "confidence": conf,
+            "evidence": f"{len(endpoints)} endpoint(s) reach this {ds_kind}",
+            "suggested": f"process::{suggest_cat}::{suggest_slug}_lifecycle",
+            "fan_out": len(endpoints),
+        })
+
     # Sort by confidence, then fan_out, descending
     candidates.sort(key=lambda c: (-c["confidence"], -c["fan_out"]))
     if args.limit:
