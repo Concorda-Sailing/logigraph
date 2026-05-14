@@ -1321,21 +1321,37 @@ def cmd_health(args: argparse.Namespace) -> int:
     orphan_claims = 0
     orphan_refs = 0
     stale_claims = 0
+
+    def _check_claim(claim: dict) -> tuple[bool, bool]:
+        cid = claim.get("depgraph_id")
+        if cid not in depgraph_ids:
+            return (True, False)
+        remote = claim.get("remote_hash")
+        current = depgraph_corpus[cid].get("structural_hash")
+        if remote and current and remote != current:
+            return (False, True)
+        return (False, False)
+
     for nid, (_, data) in nodes.items():
-        if data.get("kind") != "rule":
-            continue
-        for ref in data.get("references_domain", []):
-            if ref not in domain_ids:
-                orphan_refs += 1
-        for claim in data.get("claims_code", []):
-            cid = claim.get("depgraph_id")
-            if cid not in depgraph_ids:
-                orphan_claims += 1
-                continue
-            remote = claim.get("remote_hash")
-            current = depgraph_corpus[cid].get("structural_hash")
-            if remote and current and remote != current:
-                stale_claims += 1
+        kind = data.get("kind")
+        if kind == "rule":
+            for ref in data.get("references_domain", []):
+                if ref not in domain_ids:
+                    orphan_refs += 1
+            for claim in data.get("claims_code", []):
+                orph, st = _check_claim(claim)
+                orphan_claims += int(orph)
+                stale_claims += int(st)
+        elif kind == "process":
+            for step in data.get("steps", []):
+                for claim in step.get("claims_code", []):
+                    orph, st = _check_claim(claim)
+                    orphan_claims += int(orph)
+                    stale_claims += int(st)
+            for surface in data.get("ui_surfaces", []):
+                orph, st = _check_claim(surface)
+                orphan_claims += int(orph)
+                stale_claims += int(st)
     if orphan_claims:
         problems.append(f"{orphan_claims} orphan claim(s) (rule claims missing depgraph node) — run `logigraph gaps`")
     if orphan_refs:
