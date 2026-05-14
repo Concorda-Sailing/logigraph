@@ -971,6 +971,156 @@ def cmd_rule_finalize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _existing_process_coverage() -> set[str]:
+    """Return the set of depgraph node ids already claimed by some step
+    in some existing process node. Used to skip candidates already covered."""
+    covered: set[str] = set()
+    proc_dir = LOGIGRAPH / "nodes" / "processes"
+    if not proc_dir.is_dir():
+        return covered
+    for nf in proc_dir.glob("*.json"):
+        try:
+            d = json.loads(nf.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for st in d.get("steps") or []:
+            for c in st.get("claims_code") or []:
+                cid = c.get("depgraph_id")
+                if cid:
+                    covered.add(cid)
+        # Also count flow.endpoint / ui_surface
+        flow = d.get("flow") or {}
+        for k in ("endpoint", "ui_surface"):
+            v = flow.get(k)
+            if v:
+                covered.add(v)
+    return covered
+
+
+def _kinds_for_claims(claims: list, dg_corpus: dict[str, dict]) -> set[str]:
+    """Return the set of distinct depgraph `kind` values represented by these claims."""
+    kinds = set()
+    for c in claims or []:
+        cid = c.get("depgraph_id")
+        if not cid:
+            continue
+        node = dg_corpus.get(cid)
+        if node and node.get("kind"):
+            kinds.add(node["kind"])
+    return kinds
+
+
+def cmd_process_rank(args: argparse.Namespace) -> int:
+    """Stage 1: emit ranked candidate processes from heuristic signals.
+
+    Two signals in this pass:
+      rule_shape_mismatch — rule whose claims span ≥3 distinct depgraph kinds
+                             (it's behaving like a process)
+      entrypoint_fan_in   — endpoint whose dependents include ≥3 distinct kinds
+                             (UI + service + model is the classic flow shape)
+
+    Output is purely advisory. No corpus writes. A second LLM-classification
+    stage (the gate against pollution) can be layered on later — this stage
+    is deliberately noisy so we can see what falls out.
+    """
+    dg_corpus = load_depgraph_corpus()
+    covered = _existing_process_coverage()
+    nodes = load_all_nodes()
+    candidates: list[dict] = []
+
+    # --- Signal A: rule_shape_mismatch -----------------------------------
+    for nid, (_path, data) in nodes.items():
+        if data.get("kind") != "rule":
+            continue
+        claims = data.get("claims_code") or []
+        kinds = _kinds_for_claims(claims, dg_corpus)
+        if len(kinds) < 3:
+            continue
+        # Skip if all claim anchors are already in some process
+        anchors = [c.get("depgraph_id", "") for c in claims if c.get("depgraph_id")]
+        if anchors and all(a in covered for a in anchors):
+            continue
+        # Confidence: 0.6 base + 0.1 per kind above 3, capped at 1.0
+        conf = min(1.0, 0.6 + 0.1 * (len(kinds) - 3))
+        cat = nid.split("::", 2)[1] if "::" in nid else "uncategorized"
+        short = nid.split("::", 2)[2] if nid.count("::") >= 2 else nid.replace("rule::", "")
+        candidates.append({
+            "signal": "rule_shape_mismatch",
+            "anchor": nid,
+            "confidence": conf,
+            "evidence": f"claims span kinds: {sorted(kinds)} (len={len(kinds)})",
+            "suggested": f"process::{cat}::{short}_flow",
+            "fan_out": len(claims),
+        })
+
+    # --- Signal B: entrypoint_fan_in -------------------------------------
+    deps_index_path = DEPGRAPH / "nodes" / "_index" / "dependents.json"
+    deps_idx: dict[str, list[dict]] = {}
+    if deps_index_path.exists():
+        try:
+            raw = json.loads(deps_index_path.read_text())
+            # Depgraph stores the actual reverse-edge map under "by_target"
+            deps_idx = raw.get("by_target") or {}
+        except (OSError, json.JSONDecodeError):
+            deps_idx = {}
+    # Iterate depgraph endpoints
+    for nid, dgn in dg_corpus.items():
+        if dgn.get("kind") != "endpoint":
+            continue
+        if nid in covered:
+            continue
+        dep_entries = deps_idx.get(nid) or []
+        # Map dependent source ids to their kinds
+        dep_kinds: set[str] = set()
+        for de in dep_entries:
+            src = de.get("source") or de.get("id")
+            if not src:
+                continue
+            dep_node = dg_corpus.get(src)
+            if dep_node and dep_node.get("kind"):
+                dep_kinds.add(dep_node["kind"])
+        if len(dep_kinds) < 3:
+            continue
+        # Confidence: 0.55 base + 0.1 per kind above 3 + small bump if fan-out is high
+        conf = min(1.0, 0.55 + 0.1 * (len(dep_kinds) - 3) + min(0.2, len(dep_entries) / 100))
+        # Derive a suggested name from the endpoint path
+        title = dgn.get("title") or nid
+        # POST::/api/events/{slug}/register → events_register
+        slug = ""
+        if "::" in nid:
+            try:
+                slug = nid.split("::", 1)[1].strip("/").replace("/", "_").replace("{", "").replace("}", "")
+            except Exception:
+                slug = ""
+        candidates.append({
+            "signal": "entrypoint_fan_in",
+            "anchor": nid,
+            "confidence": conf,
+            "evidence": f"{len(dep_entries)} dependents across kinds {sorted(dep_kinds)}",
+            "suggested": f"process::endpoints::{slug[:50]}_flow",
+            "fan_out": len(dep_entries),
+        })
+
+    # Sort by confidence, then fan_out, descending
+    candidates.sort(key=lambda c: (-c["confidence"], -c["fan_out"]))
+    if args.limit:
+        candidates = candidates[: args.limit]
+
+    if args.format == "json":
+        print(json.dumps(candidates, indent=2))
+        return 0
+
+    print(f"# Process candidates (Stage 1 — heuristic, no LLM gate)\n")
+    print(f"  {len(candidates)} candidates after deduplication against existing processes\n")
+    print(f"  {'#':>3}  {'conf':>5}  {'signal':<22}  {'fan':>4}  anchor → suggested")
+    print(f"  {'-'*3}  {'-'*5}  {'-'*22}  {'-'*4}  {'-'*70}")
+    for i, c in enumerate(candidates, 1):
+        print(f"  {i:>3}  {c['confidence']:>5.2f}  {c['signal']:<22}  {c['fan_out']:>4}  {c['anchor']}")
+        print(f"  {'':>3}  {'':>5}  {'':>22}  {'':>4}    → {c['suggested']}")
+        print(f"  {'':>3}  {'':>5}  {'':>22}  {'':>4}    {c['evidence']}")
+    return 0
+
+
 def cmd_process_stub(args: argparse.Namespace) -> int:
     """Materialize a stub process node from a flow.action + ordered list of
     steps. Each --step has form 'step_id:title:depgraph_id[|where]'. Pass
@@ -1683,6 +1833,11 @@ def main() -> int:
     p_db.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
     p_db.add_argument("--actor", default=None, help="Reviewer (default: git config user.name)")
     p_db.set_defaults(func=cmd_domain_bump)
+
+    p_pr = sub.add_parser("process-rank", help="Stage 1: emit heuristic process candidates (no corpus writes)")
+    p_pr.add_argument("--limit", type=int, default=30, help="Max candidates (default 30)")
+    p_pr.add_argument("--format", choices=["text", "json"], default="text")
+    p_pr.set_defaults(func=cmd_process_rank)
 
     p_ps = sub.add_parser("process-stub", help="Materialize a process candidate as a stub JSON node")
     p_ps.add_argument("id", help="process::category::short_name")
