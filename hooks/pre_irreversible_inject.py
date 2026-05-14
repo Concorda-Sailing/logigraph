@@ -31,41 +31,160 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import sys
 
 
-# Bash patterns. Each entry: (compiled regex, short label).
-# Designed to match on word boundaries so substrings like `term` don't
-# trigger on benign content. The label is surfaced in the injection so
-# the LLM knows what flagged.
-BASH_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\brm\s+(-[a-zA-Z]*[rRfF]|--recursive|--force)"), "rm with -r/-f flags"),
-    (re.compile(r"\bgit\s+push\b(?!\s+--dry-run\b)"), "git push (real, not dry-run)"),
-    (re.compile(r"\bgit\s+reset\s+--hard\b"), "git reset --hard"),
-    (re.compile(r"\bgit\s+commit\s+--amend\b"), "git commit --amend (rewrites history)"),
-    (re.compile(r"\bgit\s+rebase\b(?!\s+--abort\b|\s+--continue\b)"), "git rebase"),
-    (re.compile(r"\bgit\s+branch\s+-D\b"), "git branch -D (force-delete)"),
-    (re.compile(r"\bgit\s+checkout\s+--\s+\."), "git checkout -- . (discards changes)"),
-    (re.compile(r"\bgit\s+restore\s+(?:--worktree\s+)?\."), "git restore . (discards changes)"),
-    (re.compile(r"\bgit\s+clean\s+-[a-zA-Z]*[fF]"), "git clean -f"),
-    (re.compile(r"\bcurl\b[^|;&]*-X\s*['\"]?(?:POST|PUT|DELETE|PATCH)\b"), "curl with mutating verb"),
-    (re.compile(r"\bcurl\b[^|;&]*--data\b"), "curl with --data (POST-shaped)"),
-    (re.compile(r"\bpsql\b[^|;&]*-c\s+['\"](?:DROP|DELETE|TRUNCATE|UPDATE|ALTER)\b", re.IGNORECASE), "psql mutating SQL"),
-    (re.compile(r"\bbq\s+(?:query|rm|cp|mk\s+--force)\b"), "bq mutating command"),
-    (re.compile(r"\bdrop\s+(?:table|database|schema)\b", re.IGNORECASE), "DROP statement"),
-    (re.compile(r"\bgcloud\s+\S+\s+(?:delete|update|patch|create)\b"), "gcloud mutating command"),
-    (re.compile(r"\baws\s+\S+\s+(?:delete|put|update|create)-\S+"), "aws mutating command"),
-    (re.compile(r"\bsudo\b"), "sudo (privileged execution)"),
-    (re.compile(r"\bdd\s+if=.*\s+of="), "dd (raw disk write)"),
-    (re.compile(r">\s*/dev/(?:sd|nvme|hd|disk)"), "redirection to block device"),
-    (re.compile(r"\bdocker\s+(?:rm|rmi|kill|stop)\s+"), "docker destructive command"),
-    (re.compile(r"\bkubectl\s+(?:delete|apply|patch|replace)\b"), "kubectl mutating command"),
-    (re.compile(r"\bsystemctl\s+(?:stop|restart|disable|kill)\b"), "systemctl service control"),
-    (re.compile(r"\bsystemctl\s+--user\s+(?:stop|restart|disable|kill)\b"), "systemctl --user service control"),
-    (re.compile(r"\bnpm\s+publish\b"), "npm publish"),
-    (re.compile(r"\bpip\s+(?:install|uninstall)\s+(?!.*--dry-run)"), "pip install/uninstall (real)"),
-    (re.compile(r"\b(?:make|just|task)\s+(?:deploy|publish|release|prod)\b"), "deploy / release target"),
-]
+# Shell control operators that start a new command segment.
+SHELL_OPERATORS = {"&&", "||", ";", "|", "&", "|&"}
+
+
+def _has_short_flag(args: list[str], letters: str) -> bool:
+    """True if any token in `args` is a short flag like `-r`, `-rf`,
+    `-fr` containing any of the given `letters`. Doesn't false-positive
+    on long flags (`--foo`) or on arguments (`-c "DROP..."`)."""
+    for t in args:
+        if t.startswith("-") and not t.startswith("--") and len(t) > 1:
+            if any(c in t[1:] for c in letters):
+                return True
+    return False
+
+
+def _check_segment(seg: list[str]) -> list[str]:
+    """Return labels for irreversibility patterns matching a single
+    command segment (list of tokens, no shell operators).
+
+    Tokens come from shlex, so quoted arguments are single tokens —
+    `grep "git push"` is `["grep", "-n", "git push", "file"]` and the
+    "git push" substring never appears as adjacent tokens."""
+    if not seg:
+        return []
+    matches: list[str] = []
+    first = seg[0]
+    rest = seg[1:]
+
+    if first == "sudo":
+        matches.append("sudo (privileged execution)")
+        # Skip optional sudo flags (-u user, -E, etc.) and recurse on the
+        # actual command after sudo. `sudo rm -rf /` should match both
+        # `sudo` and `rm with -r/-f flags`, not just sudo.
+        idx = 1
+        while idx < len(seg) and seg[idx].startswith("-"):
+            # `-u user`, `-g group` take a value
+            if seg[idx] in ("-u", "-g", "--user", "--group") and idx + 1 < len(seg):
+                idx += 2
+            else:
+                idx += 1
+        inner = seg[idx:]
+        if inner:
+            for label in _check_segment(inner):
+                if label not in matches:
+                    matches.append(label)
+
+    if first == "rm" and _has_short_flag(rest, "rRfF"):
+        matches.append("rm with -r/-f flags")
+    if first == "rm" and any(t in ("--recursive", "--force") for t in rest):
+        matches.append("rm with -r/-f flags")
+
+    if first == "git" and rest:
+        sub = rest[0]
+        args = rest[1:]
+        if sub == "push" and "--dry-run" not in args:
+            matches.append("git push (real, not dry-run)")
+        elif sub == "reset" and "--hard" in args:
+            matches.append("git reset --hard")
+        elif sub == "commit" and "--amend" in args:
+            matches.append("git commit --amend (rewrites history)")
+        elif sub == "rebase" and not any(a in ("--abort", "--continue") for a in args):
+            matches.append("git rebase")
+        elif sub == "branch" and "-D" in args:
+            matches.append("git branch -D (force-delete)")
+        elif sub == "checkout" and len(args) >= 2 and args[0] == "--" and args[1] == ".":
+            matches.append("git checkout -- . (discards changes)")
+        elif sub == "restore":
+            if "." in args or ("--worktree" in args and "." in args):
+                matches.append("git restore . (discards changes)")
+        elif sub == "clean" and _has_short_flag(args, "fF"):
+            matches.append("git clean -f")
+
+    if first == "curl":
+        # -X POST/PUT/DELETE/PATCH
+        for i, t in enumerate(rest):
+            verb = None
+            if t == "-X" and i + 1 < len(rest):
+                verb = rest[i + 1].upper()
+            elif t.startswith("-X"):
+                verb = t[2:].upper()
+            if verb in ("POST", "PUT", "DELETE", "PATCH"):
+                matches.append("curl with mutating verb")
+                break
+        if any(t == "--data" or t.startswith("--data=") or t in ("-d",) for t in rest):
+            matches.append("curl with --data (POST-shaped)")
+
+    if first == "psql":
+        for i, t in enumerate(rest):
+            if t == "-c" and i + 1 < len(rest):
+                sql = rest[i + 1].lstrip().upper()
+                if any(sql.startswith(v) for v in ("DROP", "DELETE", "TRUNCATE", "UPDATE", "ALTER")):
+                    matches.append("psql mutating SQL")
+                    break
+
+    if first == "bq" and rest:
+        sub = rest[0]
+        if sub in ("query", "rm", "cp"):
+            matches.append("bq mutating command")
+        elif sub == "mk" and "--force" in rest:
+            matches.append("bq mutating command")
+
+    if first == "gcloud":
+        # Real gcloud commands have variable depth: `gcloud <group> [<subgroup>...] <verb> [args]`.
+        # E.g. `gcloud compute instances delete foo`. Scan all positional tokens (skip flags)
+        # for the destructive verb rather than pinning it to a fixed index.
+        positionals = [t for t in rest if not t.startswith("-")]
+        verb = next((t for t in positionals if t in ("delete", "update", "patch", "create")), None)
+        if verb:
+            matches.append("gcloud mutating command")
+
+    if first == "aws" and len(rest) >= 2:
+        action = rest[1]
+        if any(action.startswith(p + "-") for p in ("delete", "put", "update", "create")):
+            matches.append("aws mutating command")
+
+    if first == "dd":
+        if any(t.startswith("if=") for t in rest) and any(t.startswith("of=") for t in rest):
+            matches.append("dd (raw disk write)")
+
+    if first == "docker" and rest and rest[0] in ("rm", "rmi", "kill", "stop"):
+        matches.append("docker destructive command")
+
+    if first == "kubectl" and rest and rest[0] in ("delete", "apply", "patch", "replace"):
+        matches.append("kubectl mutating command")
+
+    if first == "systemctl":
+        # Possibly `--user` before the verb.
+        idx = 1 if rest and rest[0] == "--user" else 0
+        if len(rest) > idx and rest[idx] in ("stop", "restart", "disable", "kill"):
+            label = "systemctl --user service control" if idx == 1 else "systemctl service control"
+            matches.append(label)
+
+    if first == "npm" and rest and rest[0] == "publish":
+        matches.append("npm publish")
+
+    if first == "pip" and rest and rest[0] in ("install", "uninstall"):
+        if "--dry-run" not in rest:
+            matches.append("pip install/uninstall (real)")
+
+    if first in ("make", "just", "task") and rest and rest[0] in ("deploy", "publish", "release", "prod"):
+        matches.append("deploy / release target")
+
+    # `> /dev/sda` block-device redirection — shlex emits `>` as a token.
+    for i, t in enumerate(seg):
+        if t == ">" and i + 1 < len(seg):
+            if re.match(r"^/dev/(?:sd|nvme|hd|disk)", seg[i + 1]):
+                matches.append("redirection to block device")
+                break
+
+    return matches
 
 # MCP write-action name pattern (caller-side filter; matches the tool
 # name passed by the harness). The settings.json matcher should be
@@ -97,12 +216,44 @@ def emit_warning(message: str) -> None:
 
 
 def detect_bash(command: str) -> list[str]:
-    """Return list of human-readable labels for irreversibility patterns
-    matched in a Bash command. Empty list means no match."""
+    """Return human-readable labels for irreversibility patterns matched
+    in a Bash command. Empty list means no match.
+
+    Strategy: shlex-tokenize the command so quoted arguments stay intact
+    (a `grep "git push"` doesn't look like a `git push`), split tokens
+    at shell control operators into command segments, then check each
+    segment's first token + arguments. This avoids the substring
+    false-positives of regex-on-raw-string matching."""
+    try:
+        # Use shlex.shlex with punctuation_chars so operators glued to tokens
+        # (`ls; rm` not `ls ; rm`, `cmd1|cmd2` not `cmd1 | cmd2`) split into
+        # their own tokens. shlex.split does NOT do this — it only splits on
+        # whitespace — and would let glued semicolons hide a destructive
+        # second segment. Quoted strings still escape this: `echo "a;b"`
+        # keeps `a;b` as one token.
+        lex = shlex.shlex(command, posix=True, punctuation_chars="&|;")
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError:
+        # Unparseable shell (unbalanced quotes etc.) — be safe and emit
+        # nothing rather than a noisy false positive. The user can re-issue
+        # the command if it was intended to trip the hook.
+        return []
+
+    segments: list[list[str]] = [[]]
+    for tok in tokens:
+        if tok in SHELL_OPERATORS:
+            segments.append([])
+        else:
+            segments[-1].append(tok)
+
+    seen: set[str] = set()
     matches: list[str] = []
-    for pattern, label in BASH_PATTERNS:
-        if pattern.search(command):
-            matches.append(label)
+    for seg in segments:
+        for label in _check_segment(seg):
+            if label not in seen:
+                seen.add(label)
+                matches.append(label)
     return matches
 
 
