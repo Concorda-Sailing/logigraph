@@ -1159,8 +1159,15 @@ def cmd_process_rank(args: argparse.Namespace) -> int:
     # Build reverse-aggregation alongside Signal C for convergence
     endpoints_reaching: dict[str, set[str]] = {}  # downstream_id -> {endpoint_ids}
 
+    # Lifecycle = state mutation, not aggregation. GET endpoints are reads
+    # in REST-shaped APIs; their fan-out reflects read patterns, not flow
+    # shape. Skip them from both Signal C and the convergence aggregation
+    # used by Signal D so noise like the ICS feed (reads 5 models) doesn't
+    # surface as flow-shaped.
     for nid, dgn in dg_corpus.items():
         if dgn.get("kind") != "endpoint":
+            continue
+        if nid.startswith("GET::"):
             continue
         reached = set(_bfs_forward(nid, max_depth=2).keys())
         # Tally for convergence signal
