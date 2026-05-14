@@ -1287,6 +1287,97 @@ def cmd_self_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_health(args: argparse.Namespace) -> int:
+    """Compact graph-health summary: validate + gaps + curation-backlog
+    counts in one block. Exit non-zero if anything is wrong. Used by the
+    SessionStart hook for at-a-glance freshness."""
+    problems: list[str] = []
+    summary: list[str] = []
+
+    nodes = load_all_nodes()
+
+    # ---- validate ------------------------------------------------------
+    invalid = 0
+    for nid, (path, data) in nodes.items():
+        kind = data.get("kind")
+        if kind == "domain":
+            schema_path = DOMAIN_SCHEMA
+        elif kind == "rule":
+            schema_path = RULE_SCHEMA
+        elif kind == "process":
+            schema_path = PROCESS_SCHEMA
+        else:
+            continue
+        if _validate_json_schema(data, schema_path):
+            invalid += 1
+    if invalid:
+        problems.append(f"{invalid} invalid node(s) — run `logigraph validate`")
+
+    # ---- gaps (orphans + stale) ----------------------------------------
+    domain_ids = {nid for nid, (_, d) in nodes.items() if d.get("kind") == "domain"}
+    depgraph_corpus = load_depgraph_corpus()
+    depgraph_ids = set(depgraph_corpus.keys())
+
+    orphan_claims = 0
+    orphan_refs = 0
+    stale_claims = 0
+    for nid, (_, data) in nodes.items():
+        if data.get("kind") != "rule":
+            continue
+        for ref in data.get("references_domain", []):
+            if ref not in domain_ids:
+                orphan_refs += 1
+        for claim in data.get("claims_code", []):
+            cid = claim.get("depgraph_id")
+            if cid not in depgraph_ids:
+                orphan_claims += 1
+                continue
+            remote = claim.get("remote_hash")
+            current = depgraph_corpus[cid].get("structural_hash")
+            if remote and current and remote != current:
+                stale_claims += 1
+    if orphan_claims:
+        problems.append(f"{orphan_claims} orphan claim(s) (rule claims missing depgraph node) — run `logigraph gaps`")
+    if orphan_refs:
+        problems.append(f"{orphan_refs} orphan domain ref(s) — run `logigraph gaps`")
+    if stale_claims:
+        problems.append(f"{stale_claims} stale claim(s) (depgraph hash drifted) — run `logigraph gaps`")
+
+    # ---- curation backlog ----------------------------------------------
+    by_kind_status: dict[str, dict[str, int]] = {}
+    for nid, (_, data) in nodes.items():
+        k = data.get("kind", "?")
+        s = data.get("definition_status", "?")
+        by_kind_status.setdefault(k, {}).setdefault(s, 0)
+        by_kind_status[k][s] += 1
+    stub_rules = by_kind_status.get("rule", {}).get("stub", 0)
+    llm_rules = by_kind_status.get("rule", {}).get("llm_drafted", 0)
+    if stub_rules:
+        problems.append(f"{stub_rules} rule(s) in stub status — run `logigraph rule-rank --status stub`")
+    if llm_rules:
+        problems.append(f"{llm_rules} rule(s) awaiting human review — run `logigraph rule-rank --status llm_drafted`")
+
+    rules = by_kind_status.get("rule", {}).get("human_reviewed", 0)
+    domain = by_kind_status.get("domain", {}).get("human_reviewed", 0)
+    process = by_kind_status.get("process", {}).get("human_reviewed", 0)
+    summary.append(f"reviewed: rules={rules} domain={domain} process={process}")
+
+    # ---- output --------------------------------------------------------
+    print("# Logigraph health")
+    if problems:
+        print()
+        for p in problems:
+            print(f"  ⚠ {p}")
+    else:
+        print()
+        print("  ✓ clean")
+    if summary:
+        print()
+        for s in summary:
+            print(f"  {s}")
+    return 1 if problems else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="logigraph")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -1323,6 +1414,9 @@ def main() -> int:
 
     p_sc = sub.add_parser("self-check")
     p_sc.set_defaults(func=cmd_self_check)
+
+    p_h = sub.add_parser("health", help="One-shot graph health summary (validate + gaps + curation backlog). Exit 1 if anything wrong.")
+    p_h.set_defaults(func=cmd_health)
 
     p_rr = sub.add_parser("rule-rank", help="List rule nodes by status (stub > llm_drafted > human_reviewed)")
     p_rr.add_argument("--status", choices=["stub", "llm_drafted", "human_reviewed"], help="Filter by status")

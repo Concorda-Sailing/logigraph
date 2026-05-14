@@ -94,6 +94,23 @@
     "warnings": {
       "type": "array",
       "items": { "$ref": "#/$defs/warning" }
+    },
+    "flagged": {
+      "type": "boolean",
+      "description": "Set by `bin/logigraph flag`. true = this process documents a known deficiency or contested decision; injection surfaces a FLAGGED banner."
+    },
+    "flagged_by": {
+      "type": "string",
+      "description": "Who flagged. Written by `flag` from --actor or $USER."
+    },
+    "flagged_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Date the node was flagged (UTC)."
+    },
+    "flagged_reason": {
+      "type": "string",
+      "description": "Free-text reason supplied to `flag --reason`."
     }
   },
   "$defs": {

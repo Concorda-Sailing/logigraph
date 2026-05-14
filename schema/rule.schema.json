@@ -68,6 +68,23 @@
     "warnings": {
       "type": "array",
       "items": { "$ref": "#/$defs/warning" }
+    },
+    "flagged": {
+      "type": "boolean",
+      "description": "Set by `bin/logigraph flag`. true = this rule documents a known deficiency or contested decision; injection surfaces a FLAGGED banner before the rule body."
+    },
+    "flagged_by": {
+      "type": "string",
+      "description": "Who flagged. Written by `flag` from --actor or $USER."
+    },
+    "flagged_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Date the node was flagged (UTC)."
+    },
+    "flagged_reason": {
+      "type": "string",
+      "description": "Free-text reason supplied to `flag --reason`."
     }
   },
   "$defs": {
@@ -101,8 +118,8 @@
           "description": "Id of a node in the depgraph corpus. Validated at regen — missing ids are orphans."
         },
         "role": {
-          "enum": ["enforces", "checks", "serializes", "displays", "emits"],
-          "description": "How this code implements the rule. enforces=gate/filter, checks=predicate, serializes=response shape, displays=UI surface, emits=side-effect."
+          "enum": ["enforces", "checks", "serializes", "displays", "emits", "illustrates"],
+          "description": "How this code relates to the rule. enforces=gate/filter, checks=predicate, serializes=response shape, displays=UI surface, emits=side-effect, illustrates=cited as example/witness when primary enforcement surfaces aren't depgraph-tracked."
         },
         "where": {
           "type": ["string", "null"],
