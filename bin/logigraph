@@ -729,6 +729,16 @@ def _process_dossier_path(process_id: str) -> Path:
     return LOGIGRAPH / "dossiers" / "processes" / f"{parts[1]}__{parts[2]}.md"
 
 
+def _process_dossier_rel(process_id: str) -> str:
+    parts = process_id.split("::")
+    return f"dossiers/processes/{parts[1]}__{parts[2]}.md"
+
+
+def _process_dossier_path(process_id: str) -> Path:
+    parts = process_id.split("::")
+    return LOGIGRAPH / "dossiers" / "processes" / f"{parts[1]}__{parts[2]}.md"
+
+
 def cmd_rule_rank(args: argparse.Namespace) -> int:
     """List rule nodes ranked by definition_status (stub > llm_drafted > human_reviewed)
     then by claim count desc. Useful for picking the next rule to author."""
@@ -958,6 +968,210 @@ def cmd_rule_finalize(args: argparse.Namespace) -> int:
     print(f"wrote {dossier_path.relative_to(LOGIGRAPH)}")
     print(f"updated {node_path.relative_to(LOGIGRAPH)} → definition_status: llm_drafted")
     print("next: review the dossier, then `bin/logigraph rule-bump '{0}'`".format(rule_id))
+    return 0
+
+
+def cmd_process_stub(args: argparse.Namespace) -> int:
+    """Materialize a stub process node from a flow.action + ordered list of
+    steps. Each --step has form 'step_id:title:depgraph_id[|where]'. Pass
+    --step multiple times to seed multi-step flows."""
+    process_id = args.id
+    if not process_id.startswith("process::"):
+        print(f"id must start with process:: — got {process_id}", file=sys.stderr)
+        return 1
+    node_path = _process_node_path(process_id)
+    if node_path.exists() and not args.force:
+        print(f"node already exists: {node_path.relative_to(LOGIGRAPH)}; pass --force to overwrite", file=sys.stderr)
+        return 1
+
+    if not args.step:
+        print("at least one --step is required (form 'step_id:title:depgraph_id[|where]')", file=sys.stderr)
+        return 1
+
+    steps = []
+    for s in args.step:
+        # format: "step_id:title:depgraph_id[|where]"
+        parts_s = s.split(":", 2)
+        if len(parts_s) != 3:
+            print(f"--step must be 'step_id:title:depgraph_id[|where]' (got: {s})", file=sys.stderr)
+            return 1
+        step_id, title, claim_part = parts_s
+        if "|" in claim_part:
+            dg_id, where = claim_part.split("|", 1)
+        else:
+            dg_id, where = claim_part, ""
+        steps.append({
+            "id": step_id.strip(),
+            "title": title.strip(),
+            "claims_code": [{
+                "depgraph_id": dg_id.strip(),
+                "role": "implements",
+                "where": where.strip(),
+                "confidence": "medium",
+                "remote_hash": "",
+                "stale": False,
+            }],
+        })
+
+    flow = {"action": args.flow_action or "TODO: describe what kicks off this flow"}
+    if args.flow_ui_surface:
+        flow["ui_surface"] = args.flow_ui_surface
+    if args.flow_endpoint:
+        flow["endpoint"] = args.flow_endpoint
+
+    title = args.title or process_id.split("::", 2)[2].replace("_", " ").capitalize()
+    summary = args.summary or "TODO: one-paragraph summary of what this flow does"
+
+    import hashlib as _h
+    structural_hash = _h.sha256(process_id.encode()).hexdigest()
+    node = {
+        "schema_version": 2,
+        "id": process_id,
+        "kind": "process",
+        "title": title,
+        "summary": summary,
+        "flow": flow,
+        "steps": steps,
+        "definition_status": "stub",
+        "structural_hash": structural_hash,
+        "dossier": _process_dossier_rel(process_id),
+    }
+    if args.enforces_rule:
+        node["enforces_rules"] = list(args.enforces_rule)
+
+    node_path.parent.mkdir(parents=True, exist_ok=True)
+    node_path.write_text(json.dumps(node, indent=2) + "\n")
+    print(f"wrote {node_path.relative_to(LOGIGRAPH)}")
+    print(f"status: stub — next: bin/logigraph process-draft '{process_id}'")
+    return 0
+
+
+def cmd_process_draft(args: argparse.Namespace) -> int:
+    """Emit an LLM-drafting context bundle for a process: the stub node +
+    each step's claim_code's depgraph dossier + sibling process examples
+    + recent commits touching any step's anchor file."""
+    process_id = args.id
+    node_path = _process_node_path(process_id)
+    if not node_path.exists():
+        print(f"no process node at {node_path.relative_to(LOGIGRAPH)} — try `process-stub` first", file=sys.stderr)
+        return 1
+    node = json.loads(node_path.read_text())
+
+    out = []
+    out.append(f"# process-draft context bundle: {process_id}\n")
+    out.append("## Target process\n")
+    out.append(f"- id: {process_id}")
+    out.append(f"- title: {node.get('title', '')}")
+    out.append(f"- summary: {node.get('summary', '')}")
+    flow = node.get("flow") or {}
+    out.append(f"- flow.action: {flow.get('action', '?')}")
+    if flow.get("endpoint"):
+        out.append(f"- flow.endpoint: `{flow['endpoint']}`")
+    if flow.get("ui_surface"):
+        out.append(f"- flow.ui_surface: `{flow['ui_surface']}`")
+    out.append(f"- steps ({len(node.get('steps') or [])}):")
+    for st in node.get("steps") or []:
+        for c in st.get("claims_code") or []:
+            out.append(f"  - {st.get('id','?')} \"{st.get('title','?')}\" → `{c.get('depgraph_id','?')}` ({c.get('where','')})")
+    if node.get("enforces_rules"):
+        out.append(f"- enforces_rules: {', '.join(node['enforces_rules'])}")
+    out.append("")
+
+    out.append("## Existing process dossiers (style examples — read these first)\n")
+    proc_dossier_dir = LOGIGRAPH / "dossiers" / "processes"
+    if proc_dossier_dir.exists():
+        for sibling in sorted(proc_dossier_dir.glob("*.md"))[:5]:
+            out.append(f"### {sibling.stem}\n")
+            out.append("```markdown")
+            out.append(sibling.read_text().rstrip())
+            out.append("```\n")
+
+    out.append("## Step anchors (depgraph dossiers + source paths)\n")
+    dg_corpus = load_depgraph_corpus()
+    for st in node.get("steps") or []:
+        out.append(f"### step `{st.get('id','?')}` — {st.get('title','')}\n")
+        for c in st.get("claims_code") or []:
+            dg_id = c.get("depgraph_id", "")
+            out.append(f"#### {dg_id}\n")
+            if dg_id in dg_corpus:
+                dgn = dg_corpus[dg_id]
+                src = dgn.get("source") or {}
+                out.append(f"- repo/path: `{src.get('repo','')}/{src.get('path','')}` line {src.get('line','?')}")
+                dossier_rel = dgn.get("dossier")
+                if dossier_rel:
+                    p = DEPGRAPH / dossier_rel
+                    if p.exists():
+                        out.append(f"- dossier: `depgraph/{dossier_rel}`\n")
+                        out.append("```markdown")
+                        out.append(p.read_text().rstrip())
+                        out.append("```\n")
+            else:
+                out.append(f"_(not in depgraph corpus — claim points at an HTTP route or extractor blind spot)_\n")
+
+    out.append("## Authoring instructions\n")
+    out.append(
+        "Write the dossier body markdown ONLY (no frontmatter — `process-finalize` adds it).\n"
+        "Processes are POINTER-SHAPED, not narrative. The dossier should be terse — "
+        "typically a single section explaining WHY this is one process and not N rules, "
+        "and any cross-cutting invariants the steps share that aren't captured by an "
+        "individual rule. Recommended sections:\n\n"
+        "  ## Why this is a process and not N rules\n"
+        "  ## Invariants across the flow\n"
+        "  ## Failure modes / partial-progress states\n"
+        "  ## State modifications (what the flow exists to do)\n"
+        "  ## Side effects (incidental but worth knowing)\n\n"
+        "Reference real commit hashes / PR ids when citing the flow's origin. Keep "
+        "everything tight. The node JSON itself carries the structured step + claim list "
+        "— don't duplicate that in prose."
+    )
+
+    print("\n".join(out))
+    return 0
+
+
+def cmd_process_finalize(args: argparse.Namespace) -> int:
+    """Write a process dossier body file to the canonical path with frontmatter
+    set to llm_drafted. Mirrors rule-finalize."""
+    process_id = args.id
+    node_path = _process_node_path(process_id)
+    if not node_path.exists():
+        print(f"no process node at {node_path.relative_to(LOGIGRAPH)} — try `process-stub` first", file=sys.stderr)
+        return 1
+    node = json.loads(node_path.read_text())
+
+    body_file = Path(args.body_file)
+    if not body_file.exists():
+        print(f"body file not found: {body_file}", file=sys.stderr)
+        return 1
+    body = body_file.read_text().strip()
+
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    title = node.get("title") or process_id
+
+    fm_lines = [
+        "---",
+        f"node_id: {process_id}",
+        "node_kind: process",
+        "definition_status: llm_drafted",
+        f"last_reviewed: {today}",
+        f"last_reviewed_against_hash: {node.get('structural_hash')}",
+    ]
+    if args.authored_by:
+        fm_lines.append("authored_by:")
+        for a in args.authored_by:
+            fm_lines.append(f"  - {a}")
+    fm_lines.append("---")
+    frontmatter = "\n".join(fm_lines) + "\n\n" + f"# {title}\n\n"
+
+    dossier_path = _process_dossier_path(process_id)
+    dossier_path.parent.mkdir(parents=True, exist_ok=True)
+    dossier_path.write_text(frontmatter + body + "\n")
+    node["definition_status"] = "llm_drafted"
+    node_path.write_text(json.dumps(node, indent=2) + "\n")
+    print(f"wrote {dossier_path.relative_to(LOGIGRAPH)}")
+    print(f"updated {node_path.relative_to(LOGIGRAPH)} → definition_status: llm_drafted")
+    print(f"next: review the dossier, then `bin/logigraph process-bump '{process_id}'`")
     return 0
 
 
@@ -1469,6 +1683,31 @@ def main() -> int:
     p_db.add_argument("--status", default="human_reviewed", choices=["stub", "llm_drafted", "human_reviewed"])
     p_db.add_argument("--actor", default=None, help="Reviewer (default: git config user.name)")
     p_db.set_defaults(func=cmd_domain_bump)
+
+    p_ps = sub.add_parser("process-stub", help="Materialize a process candidate as a stub JSON node")
+    p_ps.add_argument("id", help="process::category::short_name")
+    p_ps.add_argument("--title")
+    p_ps.add_argument("--summary", help="One-paragraph elevator pitch for the flow")
+    p_ps.add_argument("--flow-action", help="What kicks off the flow ('User clicks Accept on…', 'Stripe webhook fires', 'Cron at 02:00 UTC')")
+    p_ps.add_argument("--flow-endpoint", help="Optional depgraph node id of the HTTP endpoint that receives the trigger")
+    p_ps.add_argument("--flow-ui-surface", help="Optional depgraph node id of the UI element that triggers the flow")
+    p_ps.add_argument("--step", action="append", default=[],
+                      help="Format: 'step_id:title:depgraph_id[|where]'; repeat for ordered steps")
+    p_ps.add_argument("--enforces-rule", action="append", default=[],
+                      help="Rule id this process enforces (repeatable)")
+    p_ps.add_argument("--force", action="store_true", help="Overwrite existing node")
+    p_ps.set_defaults(func=cmd_process_stub)
+
+    p_pd = sub.add_parser("process-draft", help="Emit an LLM-drafting context bundle for one process")
+    p_pd.add_argument("id")
+    p_pd.set_defaults(func=cmd_process_draft)
+
+    p_pf = sub.add_parser("process-finalize", help="Save an LLM-drafted process dossier body to canonical path")
+    p_pf.add_argument("id")
+    p_pf.add_argument("body_file", help="Path to dossier body markdown (no frontmatter)")
+    p_pf.add_argument("--authored-by", action="append", default=[],
+                      help="Actor that drafted the body (model id or person). Repeat for multiple authors.")
+    p_pf.set_defaults(func=cmd_process_finalize)
 
     p_pb = sub.add_parser("process-bump", help="Promote a process node's definition_status (default → human_reviewed)")
     p_pb.add_argument("id")
