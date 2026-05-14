@@ -971,13 +971,18 @@ def cmd_rule_finalize(args: argparse.Namespace) -> int:
     return 0
 
 
-def _existing_process_coverage() -> set[str]:
-    """Return the set of depgraph node ids already claimed by some step
-    in some existing process node. Used to skip candidates already covered."""
+def _existing_process_coverage(dg_corpus: dict[str, dict] | None = None) -> set[str]:
+    """Return the set of depgraph node ids already covered by some existing
+    process: directly claimed by any step OR named as flow.endpoint /
+    flow.ui_surface OR reachable forward (1-2 hops) from any covered
+    endpoint. The forward-reach expansion suppresses convergence-on-model
+    candidates that the existing endpoint-anchored processes already
+    implicitly own."""
     covered: set[str] = set()
     proc_dir = LOGIGRAPH / "nodes" / "processes"
     if not proc_dir.is_dir():
         return covered
+    direct_endpoints: list[str] = []
     for nf in proc_dir.glob("*.json"):
         try:
             d = json.loads(nf.read_text())
@@ -988,12 +993,35 @@ def _existing_process_coverage() -> set[str]:
                 cid = c.get("depgraph_id")
                 if cid:
                     covered.add(cid)
-        # Also count flow.endpoint / ui_surface
+                    if dg_corpus and (dg_corpus.get(cid) or {}).get("kind") == "endpoint":
+                        direct_endpoints.append(cid)
         flow = d.get("flow") or {}
         for k in ("endpoint", "ui_surface"):
             v = flow.get(k)
             if v:
                 covered.add(v)
+                if dg_corpus and k == "endpoint":
+                    direct_endpoints.append(v)
+    # Forward-reach expansion: 1-2 hops from each covered endpoint
+    if dg_corpus:
+        for ep in direct_endpoints:
+            node = dg_corpus.get(ep)
+            if not node:
+                continue
+            hop1 = []
+            for edge in node.get("depends_on") or []:
+                tgt = edge.get("target") if isinstance(edge, dict) else None
+                if tgt:
+                    covered.add(tgt)
+                    hop1.append(tgt)
+            for h in hop1:
+                node2 = dg_corpus.get(h)
+                if not node2:
+                    continue
+                for edge in node2.get("depends_on") or []:
+                    tgt = edge.get("target") if isinstance(edge, dict) else None
+                    if tgt:
+                        covered.add(tgt)
     return covered
 
 
@@ -1024,7 +1052,7 @@ def cmd_process_rank(args: argparse.Namespace) -> int:
     is deliberately noisy so we can see what falls out.
     """
     dg_corpus = load_depgraph_corpus()
-    covered = _existing_process_coverage()
+    covered = _existing_process_coverage(dg_corpus)
     nodes = load_all_nodes()
     candidates: list[dict] = []
 
@@ -1262,10 +1290,17 @@ def cmd_process_rank(args: argparse.Namespace) -> int:
     # isn't user-facing or scheduled production work. Path-shaped hints
     # only (no hardcoded repo basenames).
     TEST_PATH_HINTS = ("/tests/", "tests/", ".spec.ts", ".spec.tsx", "_test.py", "test_", "/spec/")
-    # API client wrappers (lib/api.ts, lib/api-client.ts) are thin shells
-    # around an endpoint — calling them is "calling the endpoint." They
-    # reach endpoints+models but the flow lives in the endpoint.
-    API_CLIENT_PATH_HINTS = ("lib/api.ts", "lib/api-client.ts", "api_client.py", "lib/client.ts")
+    # API client wrappers (lib/api.ts, lib/api-client.ts) and client-side
+    # hooks/utils directories — these are thin shells or caching primitives.
+    # Calling them is "calling the endpoint." They reach endpoints+models
+    # but the flow lives in the endpoint, not the wrapper. Path-shaped
+    # conventions only, not literal project repo names.
+    API_CLIENT_PATH_HINTS = (
+        "lib/api.ts", "lib/api-client.ts", "lib/client.ts",
+        "api_client.py", "client.py",
+        "/hooks/", "hooks/use-",   # React-convention client hooks
+        "/utils/", "/util/",        # generic util dirs
+    )
     for nid, dgn in dg_corpus.items():
         kind = dgn.get("kind")
         if kind in HEADLESS_SKIP_KINDS:
